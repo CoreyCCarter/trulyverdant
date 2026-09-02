@@ -1,5 +1,9 @@
 # Production runbook
 
+Both machines run the app under the **`verdant`** user, from
+`/home/verdant/trulyverdant`. Run every command below as `verdant` unless it
+is prefixed with `sudo`.
+
 Two machines:
 
 - **VPS** — public. Terminates TLS, runs nginx, holds the WireGuard endpoint.
@@ -30,6 +34,20 @@ below. This document uses `10.8.0.2`.
 sudo apt install python3-venv postgresql-client supervisor
 ```
 
+If the `verdant` user does not exist yet:
+
+```bash
+sudo adduser --disabled-password --gecos "" verdant
+sudo -u verdant -i          # run the rest of this section as verdant
+```
+
+`verdant` needs its own way to reach GitHub, since it does not share your
+SSH agent. Either add a **deploy key** — generate `ssh-keygen -t ed25519` as
+`verdant` and add the public key at *Settings → Deploy keys* on the repo —
+or clone over HTTPS with a token. A deploy key is preferable: it grants
+access to this one repository rather than your whole account, and read-only
+is enough because deploys only pull.
+
 `postgresql-client` is not optional: `deploy.sh` refuses to migrate without
 `pg_dump`, which is the behaviour you want.
 
@@ -45,21 +63,27 @@ GRANT ALL PRIVILEGES ON DATABASE trulyverdant TO trulyverdant;
 
 ### 2.3 Checkout
 
+As `verdant`:
+
 ```bash
-git clone git@github.com:CoreyCCarter/trulyverdant.git ~/trulyverdant
-cd ~/trulyverdant
+git clone git@github.com:CoreyCCarter/trulyverdant.git /home/verdant/trulyverdant
+cd /home/verdant/trulyverdant
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
 
-A home-directory checkout needs no permission changes here. Supervisor runs
-as root and can read it whatever its mode, and it launches gunicorn as the
-user who owns the code — so the app reads its own files as itself. Nothing
-else needs access, because nginx is on the VPS and never touches this disk.
+The checkout must be **owned by `verdant`** — `install-services.sh` reads
+its owner to decide which user gunicorn runs as. If you cloned as root by
+mistake, fix it before continuing:
 
-(If you previously ran a local nginx against a home checkout and loosened
-`/home/<user>` with `chmod o+x`, that is no longer needed. `chmod 750
-/home/<user>` puts it back.)
+```bash
+sudo chown -R verdant:verdant /home/verdant/trulyverdant
+```
+
+No permission changes are needed beyond that. Supervisor runs as root and
+can read the checkout whatever its mode, and it launches gunicorn as
+`verdant`, which reads its own files as itself. Nothing else needs access,
+because nginx is on the VPS and never touches this disk.
 
 ### 2.4 Configuration
 
@@ -125,7 +149,7 @@ Then, so `deploy.sh` can restart the app without running the whole deploy as
 root (which would leave root-owned files in the checkout):
 
 ```bash
-sudo sed -i 's|^chmod=0700.*|chmod=0770\nchown=root:YOUR_USER|' \
+sudo sed -i 's|^chmod=0700.*|chmod=0770\nchown=root:verdant|' \
     /etc/supervisor/supervisord.conf
 sudo systemctl restart supervisor
 supervisorctl status trulyverdant          # must work unprivileged
@@ -145,8 +169,8 @@ curl -I http://10.8.0.2:8000/
 
 ```bash
 sudo apt install nginx certbot python3-certbot-nginx
-git clone git@github.com:CoreyCCarter/trulyverdant.git ~/trulyverdant
-cd ~/trulyverdant
+git clone git@github.com:CoreyCCarter/trulyverdant.git /home/verdant/trulyverdant
+cd /home/verdant/trulyverdant
 ```
 
 The VPS only needs the repo for the nginx config — no venv, no `.env`, no
@@ -208,10 +232,11 @@ Nothing there is correct. A hit means fix `.env` and restart.
 ## 5. Backups
 
 `deploy.sh` takes one before every migration, but that only covers days you
-deploy. Add a daily job:
+deploy. Add a daily job to `verdant`'s crontab (`crontab -e` as `verdant`, or
+`sudo crontab -u verdant -e`):
 
 ```cron
-17 3 * * * cd $HOME/trulyverdant && ./deploy.sh --backup >> /var/log/trulyverdant/backup.log 2>&1
+17 3 * * * cd /home/verdant/trulyverdant && ./deploy.sh --backup >> /var/log/trulyverdant/backup.log 2>&1
 ```
 
 Backups land in `backups/` (last 10 kept, `KEEP_BACKUPS` to change) and
@@ -229,7 +254,7 @@ confirm. Prove it works while nothing is on fire.
 ## 6. Deploying changes
 
 ```bash
-cd ~/trulyverdant
+cd /home/verdant/trulyverdant
 HEALTH_URL=https://yourdomain.com/ ./deploy.sh
 ```
 
