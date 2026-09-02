@@ -233,6 +233,8 @@ consequence — session cookies in the clear — is otherwise invisible.
 
 ## Deploying
 
+Standing up production for the first time: **[docs/PRODUCTION.md](docs/PRODUCTION.md)**.
+
 ```bash
 ./deploy.sh                # backup, pull, deps, migrate, restart, health check
 ./deploy.sh --dry-run      # show what would happen, change nothing
