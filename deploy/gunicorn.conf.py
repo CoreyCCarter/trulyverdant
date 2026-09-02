@@ -6,11 +6,16 @@ only in their .env values, not in how the app is served.
 import multiprocessing
 import os
 
-# Loopback TCP. Like a unix socket this is unreachable from outside the
-# machine, but it avoids the socket's permission trap: gunicorn chowns the
-# socket to its own uid/gid after binding, so nginx can only connect when
-# the app user and the nginx user share a group. Using a unix socket instead
-# means adding one to the other's group and setting `group` below.
+# nginx runs on a separate VPS and reaches this process over WireGuard, so
+# the bind address must be this host's WireGuard address -- e.g.
+# GUNICORN_BIND=10.8.0.2:8000 in .env.
+#
+# Do NOT bind 0.0.0.0. There is no authentication in front of the app, and
+# gunicorn trusts X-Forwarded-* headers (see PROXY_FIX_HOPS), so anything
+# that can reach this port can spoof its own client IP and scheme. Binding
+# the tunnel interface makes the VPS the only thing that can connect.
+#
+# Defaults to loopback so an unconfigured host is not accidentally exposed.
 bind = os.environ.get('GUNICORN_BIND', '127.0.0.1:8000')
 
 # The familiar cpu_count*2+1 formula assumes sync workers, where a worker

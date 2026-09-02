@@ -104,31 +104,65 @@ and let the CMP take over gating once one is installed.
 ## Serving
 
 The Flask development server is single-process and not built for real
-traffic. Everything past local iteration goes through gunicorn behind nginx.
+traffic. The application runs under gunicorn, supervised by supervisor, on a
+private host. A separate public VPS terminates TLS and proxies to it over a
+WireGuard tunnel.
 
 ```
-nginx  ──unix socket──▶  gunicorn (gthread)  ──▶  Flask app
-  │                            ▲
-  └── serves /static directly  └── supervised by supervisor
+                    public internet
+                          │ https
+                    ┌─────▼─────┐
+                    │ VPS nginx │   TLS, gzip, security headers
+                    └─────┬─────┘
+                          │ http over wg0
+                    ┌─────▼──────────────────┐
+                    │ app server             │
+                    │  gunicorn (gthread)    │  supervised by supervisor
+                    │  Flask app             │
+                    │  app/static + uploads  │
+                    └────────────────────────┘
 ```
 
-Three config files, all commented and needing paths adjusted:
+The app server runs **no nginx**. Two files live there, one on the VPS:
 
-| File | Install to |
-| --- | --- |
-| `deploy/gunicorn.conf.py` | used in place, via `-c` |
-| `deploy/nginx.conf` | `/etc/nginx/sites-available/trulyverdant` |
-| `deploy/supervisor.conf` | `/etc/supervisor/conf.d/trulyverdant.conf` |
+| File | Host | Install to |
+| --- | --- | --- |
+| `deploy/gunicorn.conf.py` | app server | used in place, via `-c` |
+| `deploy/supervisor.conf` | app server | `/etc/supervisor/conf.d/trulyverdant.conf` |
+| `deploy/nginx-vps.conf` | **VPS** | `/etc/nginx/sites-available/trulyverdant` |
+
+### App server
 
 ```bash
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/trulyverdant
-sudo ln -s /etc/nginx/sites-available/trulyverdant /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-
-sudo mkdir -p /run/trulyverdant /var/log/trulyverdant
-sudo cp deploy/supervisor.conf /etc/supervisor/conf.d/trulyverdant.conf
-sudo supervisorctl reread && sudo supervisorctl update
+sudo ./deploy/install-services.sh
 ```
+
+Set `GUNICORN_BIND` in `.env` to this host's **WireGuard** address, e.g.
+`10.8.0.2:8000`. Never `0.0.0.0`: nothing authenticates in front of the app,
+and it trusts `X-Forwarded-*`, so anything that can reach the port can forge
+its own client IP and scheme. Binding the tunnel makes the VPS the only way
+in.
+
+### VPS
+
+Edit `deploy/nginx-vps.conf`, replacing `SERVER_NAME_HERE` with the domain
+and `APP_WG_IP` with the app server's WireGuard address, then:
+
+```bash
+sudo cp nginx-vps.conf /etc/nginx/sites-available/trulyverdant
+sudo ln -s /etc/nginx/sites-available/trulyverdant /etc/nginx/sites-enabled/
+sudo certbot --nginx -d yourdomain.com
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Because nginx is on a different machine it cannot read the app's disk, so
+`/static/` — including uploaded images — is proxied like everything else.
+Every asset therefore crosses the tunnel and occupies a gunicorn thread. If
+that becomes slow once there are real images, add a `proxy_cache` to the
+`location /` block on the VPS; nothing in the app needs to change.
+
+The config returns a plain 503 page rather than a raw 502 when the tunnel is
+down.
 
 ### Wiring up nginx + supervisor
 
@@ -186,10 +220,16 @@ nginx serves `/static` itself, so the app never handles an asset request.
 Uploads are real files under `app/static/uploads/` — put them on persistent
 storage, because a rebuild without a mounted volume loses every image.
 
-Set `PROXY_FIX_HOPS=1` when running behind nginx so `request.scheme`, the
-client IP and the Secure cookie flag reflect the real request rather than
-the local hop from the proxy. Leave it at `0` if gunicorn is ever exposed
-directly — trusting more hops than exist lets a client forge its own IP.
+Set `PROXY_FIX_HOPS=1` so `request.scheme` and the client IP reflect the
+browser's real request rather than the tunnel hop. Raise it only if you add
+another proxy in front; trusting more hops than exist lets a client forge
+its own IP and scheme.
+
+TLS terminates at the VPS, so the browser's connection **is** https and
+`SESSION_COOKIE_SECURE` must be `true`. It is only ever `false` for serving
+the app over plain http directly, which is a development arrangement. The
+app logs a warning at startup if it is false outside debug, because the
+consequence — session cookies in the clear — is otherwise invisible.
 
 ## Deploying
 
