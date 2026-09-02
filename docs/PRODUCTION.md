@@ -152,7 +152,24 @@ you want before approval.
 Do **not** run `flask seed-demo` on production; it inserts placeholder
 articles.
 
-### 2.6 Firewall
+### 2.6 Preflight
+
+Before starting anything, check the configuration:
+
+```bash
+./venv/bin/flask preflight
+```
+
+It verifies the settings whose failure mode is silence — a development
+`SECRET_KEY`, a `SITE_URL` still pointing at localhost, `SESSION_COOKIE_SECURE`
+mismatched to the scheme, `SEO_INDEXABLE` left false, a bind address that
+either exposes the app to every interface or cannot be reached from the VPS
+— plus database reachability, schema at head, and an admin account existing.
+
+It exits non-zero on any failure. Fix everything it reports before
+continuing.
+
+### 2.7 Firewall
 
 Gunicorn has no authentication in front of it and trusts `X-Forwarded-*`
 headers, so anything that can reach port 8000 can forge a client IP and
@@ -166,7 +183,7 @@ sudo ufw deny 8000
 
 Verify from a third machine that `http://<app-lan-ip>:8000/` is refused.
 
-### 2.7 Supervisor
+### 2.8 Supervisor
 
 ```bash
 sudo ./deploy/install-services.sh

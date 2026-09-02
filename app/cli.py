@@ -7,7 +7,148 @@ from app.models import (User, Article, Category, Tag, Invite, unique_slug,
 from app.content import render_markdown, summarise, reading_time
 
 
+def _preflight_checks(app):
+    """Yield (level, name, detail) for each production readiness check.
+
+    Level is 'ok', 'warn' or 'fail'. These target settings whose failure
+    mode is silence: a stale SECRET_KEY forges sessions, a Secure cookie
+    mismatched to the scheme makes sign-in appear to do nothing, and
+    SEO_INDEXABLE left false quietly tells Google to go away.
+    """
+    import os
+    from urllib.parse import urlsplit
+    from sqlalchemy import text
+    from config import DEV_SECRET_KEY
+
+    cfg = app.config
+
+    # --- secrets ---------------------------------------------------------
+    key = cfg.get('SECRET_KEY') or ''
+    if key == DEV_SECRET_KEY:
+        yield 'fail', 'SECRET_KEY', 'still the insecure development default'
+    elif len(key) < 32:
+        yield 'warn', 'SECRET_KEY', f'only {len(key)} chars; use 32+'
+    else:
+        yield 'ok', 'SECRET_KEY', f'set ({len(key)} chars)'
+
+    # --- public identity -------------------------------------------------
+    site = cfg.get('SITE_URL') or ''
+    parts = urlsplit(site)
+    if not site or parts.hostname in (None, 'localhost', '127.0.0.1'):
+        yield 'fail', 'SITE_URL', f'{site!r} is not a public address'
+    elif parts.scheme != 'https':
+        yield 'warn', 'SITE_URL', f'{site} is not https'
+    elif site.endswith('/'):
+        yield 'warn', 'SITE_URL', 'has a trailing slash; URLs will double up'
+    else:
+        yield 'ok', 'SITE_URL', site
+
+    # --- cookies and proxying -------------------------------------------
+    if not cfg.get('SESSION_COOKIE_SECURE'):
+        yield 'fail', 'SESSION_COOKIE_SECURE', \
+            'false: session cookies will be sent in the clear'
+    else:
+        yield 'ok', 'SESSION_COOKIE_SECURE', 'true'
+
+    hops = cfg.get('PROXY_FIX_HOPS', 0)
+    if hops < 1:
+        yield 'warn', 'PROXY_FIX_HOPS', \
+            '0: client IP and scheme will be the proxy hop, not the browser'
+    else:
+        yield 'ok', 'PROXY_FIX_HOPS', str(hops)
+
+    # --- indexing --------------------------------------------------------
+    if not cfg.get('SEO_INDEXABLE'):
+        yield 'warn', 'SEO_INDEXABLE', \
+            'false: emits noindex and blocks crawlers (correct only for staging)'
+    else:
+        yield 'ok', 'SEO_INDEXABLE', 'true'
+
+    # --- bind address ----------------------------------------------------
+    bind = os.environ.get('GUNICORN_BIND', '127.0.0.1:8000')
+    if bind.startswith('0.0.0.0'):
+        yield 'fail', 'GUNICORN_BIND', \
+            '0.0.0.0 exposes the unauthenticated app on every interface'
+    elif bind.startswith(('127.', 'localhost', 'unix:')):
+        yield 'warn', 'GUNICORN_BIND', \
+            f'{bind}: unreachable from a separate nginx host'
+    else:
+        yield 'ok', 'GUNICORN_BIND', bind
+
+    # --- database --------------------------------------------------------
+    try:
+        from alembic.script import ScriptDirectory
+        from alembic.runtime.migration import MigrationContext
+        acfg = app.extensions['migrate'].migrate.get_config()
+        head = ScriptDirectory.from_config(acfg).get_current_head()
+        with db.engine.connect() as conn:
+            conn.execute(text('select 1'))
+            at = MigrationContext.configure(conn).get_current_revision()
+        if at == head:
+            yield 'ok', 'database', f'reachable, schema at head ({head})'
+        else:
+            yield 'fail', 'database', \
+                f'schema at {at or "nothing"}, head is {head} -- run flask db upgrade'
+    except Exception as exc:
+        yield 'fail', 'database', f'{type(exc).__name__}: {str(exc)[:80]}'
+        return
+
+    # --- accounts --------------------------------------------------------
+    try:
+        admins = User.query.filter_by(role=ROLE_ADMIN, is_active_user=True).count()
+        if admins:
+            yield 'ok', 'admin account', f'{admins} active'
+        else:
+            yield 'fail', 'admin account', 'none -- run flask create-admin'
+    except Exception as exc:
+        yield 'fail', 'admin account', str(exc)[:80]
+
+    # --- uploads ---------------------------------------------------------
+    updir = cfg.get('UPLOAD_FOLDER')
+    if updir and os.path.isdir(updir) and os.access(updir, os.W_OK):
+        yield 'ok', 'upload folder', updir
+    elif updir and not os.path.isdir(updir):
+        yield 'warn', 'upload folder', f'{updir} does not exist yet'
+    else:
+        yield 'fail', 'upload folder', f'{updir} is not writable'
+
+    # --- advertising (informational) -------------------------------------
+    if cfg.get('ADSENSE_CLIENT_ID'):
+        if cfg.get('ADS_TXT'):
+            yield 'ok', 'adsense', 'client id and ads.txt configured'
+        else:
+            yield 'warn', 'adsense', \
+                'client id set but ADS_TXT empty: /ads.txt 404s and ads will not serve'
+    else:
+        yield 'ok', 'adsense', 'not configured (no ad code emitted)'
+
+
 def register(app):
+    @app.cli.command('preflight')
+    def preflight():
+        """Check production configuration before starting."""
+        symbols = {'ok': ('  ok  ', 'green'), 'warn': (' warn ', 'yellow'),
+                   'fail': (' FAIL ', 'red')}
+        failures = warnings = 0
+        click.echo('')
+        for level, name, detail in _preflight_checks(app):
+            mark, colour = symbols[level]
+            if level == 'fail':
+                failures += 1
+            elif level == 'warn':
+                warnings += 1
+            click.echo(f'{click.style(mark, fg=colour, reverse=True)} '
+                       f'{name:<22} {detail}')
+        click.echo('')
+        if failures:
+            raise click.ClickException(
+                f'{failures} check(s) failed. Fix these before serving traffic.')
+        if warnings:
+            click.echo(click.style(
+                f'{warnings} warning(s). Review before going live.', fg='yellow'))
+        else:
+            click.echo(click.style('All checks passed.', fg='green'))
+
     @app.cli.command('create-admin')
     @click.option('--username', prompt=True)
     @click.option('--email', prompt=True)

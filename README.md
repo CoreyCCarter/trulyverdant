@@ -61,6 +61,7 @@ flask seed-demo
 | `flask invite EMAIL [--role admin\|author]` | Print an invitation link. |
 | `flask seed-demo` | Add sample categories and articles. |
 | `flask db upgrade` | Apply database migrations. |
+| `flask preflight` | Check production configuration before starting. |
 | `pytest` | Run the test suite. |
 
 Invitations can also be issued from **Admin → People**.
