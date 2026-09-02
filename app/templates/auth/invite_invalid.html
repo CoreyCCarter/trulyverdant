@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="narrow panel">
+  <h1>Invitation not valid</h1>
+  <p>This invitation link has expired, has already been used, or never existed.
+     Ask an administrator to send you a new one.</p>
+  <p><a class="btn" href="{{ url_for('public.index') }}">Back to the homepage</a></p>
+</div>
+{% endblock %}

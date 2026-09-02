@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'partials/card.html' import article_card, pagination %}
+
+{% block content %}
+<h1 class="page-heading">Search</h1>
+<form class="search-form" action="{{ url_for('public.search') }}" method="get" role="search">
+  <label class="visually-hidden" for="qq">Search articles</label>
+  <input id="qq" type="search" name="q" value="{{ q }}" placeholder="e.g. monstera, yellow leaves">
+  <button class="btn" type="submit">Search</button>
+</form>
+{%- if q %}
+  {%- if articles and articles.items %}
+  <p class="muted">{{ articles.total }} result{{ '' if articles.total == 1 else 's' }} for “{{ q }}”.</p>
+  <div class="card-grid">
+    {%- for a in articles.items %}{{ article_card(a) }}{% endfor %}
+  </div>
+  {{ pagination(articles, 'public.search', {'q': q}) }}
+  {%- else %}
+  <p class="empty">Nothing matched “{{ q }}”.</p>
+  {%- endif %}
+{%- endif %}
+{% endblock %}

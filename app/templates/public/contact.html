@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<article class="article narrow">
+  <h1>Contact</h1>
+  <div class="prose">
+    <p>We read everything, and we correct mistakes promptly.</p>
+    {%- if contact_email %}
+    <p>Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+    {%- else %}
+    <p>A contact address has not been configured yet. Set
+       <code>CONTACT_EMAIL</code> in the site environment to display one here.</p>
+    {%- endif %}
+    <p>For privacy requests, including access to or deletion of any personal
+       data we hold, see our
+       <a href="{{ url_for('public.privacy') }}">privacy policy</a>.</p>
+  </div>
+</article>
+{% endblock %}

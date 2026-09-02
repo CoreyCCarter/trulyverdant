@@ -1,232 +1,267 @@
-import base64
-from datetime import datetime, timedelta
-from hashlib import md5
-import json
-import os
-from time import time
-from flask import current_app, url_for
+from datetime import datetime, timezone, timedelta
+import secrets
+from urllib.parse import urlsplit
+
+from flask import url_for
 from flask_login import UserMixin
+from slugify import slugify
 from werkzeug.security import generate_password_hash, check_password_hash
-import jwt
-import redis
-import rq
-from app import db, login
+
+from app.extensions import db, login
 
 
-class PaginatedAPIMixin(object):
-    @staticmethod
-    def to_collection_dict(query, page, per_page, endpoint, **kwargs):
-        resources = query.paginate(page=page, per_page=per_page, error_out=False )
-        data = {
-            'items': [item.to_dict() for item in resources.items],
-            '_meta': {
-                'page': page,
-                'per_page': per_page,
-                'total_pages': resources.pages,
-                'total_items': resources.total
-            },
-            '_links': {
-                'self': url_for(endpoint, page=page, per_page=per_page, **kwargs),
-                'next': url_for(endpoint, page=page + 1, per_page = per_page, **kwargs) if resources.has_next else None,
-                'prev': url_for(endpoint, page=page - 1, per_page = per_page, **kwargs) if resources.has_prev else None
-
-            }
-        }
-        return data
+def utcnow():
+    return datetime.now(timezone.utc)
 
 
-followers = db.Table('followers', db.Column('follower_id', db.Integer, db.ForeignKey('user.id')),
-            db.Column('followed_id', db.Integer, db.ForeignKey('user.id')))
+def as_utc(dt):
+    """Normalise a datetime read back from the database to aware UTC.
 
-class User(UserMixin, PaginatedAPIMixin, db.Model):
-    id = db.Column(db.Integer, primary_key = True)
-    username = db.Column(db.String(64), index = True, unique = True)
-    email = db.Column(db.String(120), index = True, unique = True)
-    password_hash = db.Column(db.String(128))
-    posts = db.relationship('Post', backref='author', lazy='dynamic')
-    about_me = db.Column(db.String(1000))
-    join_date = db.Column(db.DateTime, default=datetime.utcnow)
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    followed = db.relationship('User', secondary=followers, primaryjoin=(followers.c.follower_id == id),
-                               secondaryjoin=(followers.c.followed_id == id),
-                               backref=db.backref('followers', lazy='dynamic'),
+    Postgres timestamptz round-trips as timezone-aware, but SQLite drops the
+    offset and hands back a naive datetime. Comparing that to an aware
+    utcnow() raises TypeError, so every Python-side comparison goes through
+    here.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def path_for(endpoint, **values):
+    """url_for() that always yields a path, never an absolute URL.
+
+    Outside a request context Flask makes url_for absolute whenever
+    SERVER_NAME is set. These values get concatenated onto SITE_URL for the
+    sitemap, feed and canonical tags, so an absolute one here would produce
+    'https://site.comhttps://site.com/article/x'.
+    """
+    parts = urlsplit(url_for(endpoint, **values))
+    return parts.path + (f'?{parts.query}' if parts.query else '')
+
+
+ROLE_ADMIN = 'admin'
+ROLE_AUTHOR = 'author'
+ROLES = (ROLE_ADMIN, ROLE_AUTHOR)
+
+STATUS_DRAFT = 'draft'
+STATUS_PUBLISHED = 'published'
+
+
+def unique_slug(model, value, *, column='slug', ignore_id=None):
+    """Slugify `value`, appending -2, -3 ... until it is unique."""
+    base = slugify(value) or 'untitled'
+    candidate, suffix = base, 1
+    # no_autoflush: this runs while the caller is still populating a pending
+    # object, and an autoflush here would try to INSERT it half-built.
+    with db.session.no_autoflush:
+        while True:
+            stmt = db.select(model).where(getattr(model, column) == candidate)
+            if ignore_id is not None:
+                stmt = stmt.where(model.id != ignore_id)
+            if db.session.scalars(stmt).first() is None:
+                return candidate
+            suffix += 1
+            candidate = f'{base}-{suffix}'
+
+
+article_tags = db.Table(
+    'article_tags',
+    db.Column('article_id', db.Integer, db.ForeignKey('articles.id'),
+              primary_key=True),
+    db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'),
+              primary_key=True),
+)
+
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True, nullable=False)
+    email = db.Column(db.String(190), index=True, unique=True, nullable=False)
+    password_hash = db.Column(db.String(256))
+    display_name = db.Column(db.String(120))
+    bio = db.Column(db.Text)
+    role = db.Column(db.String(16), default=ROLE_AUTHOR, nullable=False)
+    is_active_user = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+
+    articles = db.relationship('Article', back_populates='author',
                                lazy='dynamic')
-    messages_sent = db.Relationship('Message', foreign_keys='Message.sender_id',backref='author', lazy='dynamic')
-    messages_received = db.Relationship('Message', foreign_keys='Message.recipient_id', backref='recipient', lazy='dynamic')
-    last_message_read_time = db.Column(db.DateTime)
-    notifications = db.relationship('Notification', backref='user', lazy='dynamic')
-    tasks = db.relationship('Task', backref='user', lazy='dynamic')
-    token = db.Column(db.String(32), index=True, unique=True)
-    token_expiration = db.Column(db.DateTime)
 
-
-    def follow(self, user):
-        if not self.is_following(user):
-            self.followed.append(user)
-    def unfollow(self,user):
-        if self.is_following(user):
-            self.followed.remove(user)
-    def is_following(self, user):
-        return self.followed.filter(followers.c.followed_id == user.id).count() > 0
-    
-    def followed_posts(self):
-        followed = Post.query.join(followers, (followers.c.followed_id == Post.user_id)).filter(
-            followers.c.follower_id == self.id)
-        own = Post.query.filter_by(user_id=self.id)
-        return followed.union(own).order_by(Post.timestamp.desc())
-    
-
-
-    def __repr__(self):
-        return '<User {}>'.format(self.username)
-    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
-    
-    def avatar(self, size):
-        digest = md5(self.email.lower().encode('utf-8')).hexdigest()
-        return 'https://www.gravatar.com/avatar/{}?d=monsterid&s={}&bg=00ff00'.format(digest,size)
-    
-    def get_reset_password_token(self, expires_in=600):
-        return jwt.encode({'reset_password': self.id, 'exp': time() + expires_in},
-                          current_app.config['SECRET_KEY'], algorithm='HS256')
-    
-    @staticmethod
-    def verify_reset_password_token(token):
-        try:
-            id = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])['reset_password']
-        except:
-            return
-        return User.query.get(id)
-    def new_messages(self):
-        last_read_time = self.last_message_read_time or datetime(1900,1,1)
-        return Message.query.filter_by(recipient=self).filter(Message.timestamp > last_read_time).count()
-    
-    def add_notification(self, name, data):
-        self.notifications.filter_by(name=name).delete()
-        n = Notification(name=name, payload_json=json.dumps(data), user=self)
-        db.session.add(n)
-        return n
-    def launch_task(self, name, description, *args, **kwargs):
-        rq_job = current_app.task_queue.enqueue('app.tasks.' + name, self.id, *args,**kwargs)
-        task = Task(id=rq_job.get_id(), name=name, description=description,user=self)
-        db.session.add(task)
-        return task
-    def get_tasks_in_progress(self):
-        return Task.query.filter_by(user=self, complete=False).all()
-    def get_task_in_progress(self, name):
-        return Task.query.filter_by(name=name, user=self,complete=False).first()   
 
-    def to_dict(self, include_email=False):
-        data = {
-            'id': self.id,
-            'username': self.username,
-            'last_seen': self.last_seen.isoformat() + 'Z',
-            'about_me': self.about_me,
-            'post_count': self.posts.count(),
-            'follower_count': self.followers.count(),
-            'followed_count': self.followed.count(),
-            '_links': {
-                'self': url_for('api.get_user', id=self.id),
-                'followers': url_for('api.get_followers', id=self.id),
-                'followed': url_for('api.get_followed',id=self.id),
-                'avatar': self.avatar(128)
-            }
-        }
-        if include_email:
-            data['email'] = self.email
-        return data
-    
-    def from_dict(self, data, new_user=False):
-        for field in ['username', 'email', 'about_me']:
-            if field in data:
-                setattr(self, field, data[field])
-            if new_user and 'password' in data:
-                self.set_password(data['password'])
+    @property
+    def is_admin(self):
+        return self.role == ROLE_ADMIN
 
-    def get_token(self, expires_in=3600):
-        now = datetime.utcnow()
-        if self.token and self.token_expiration > now + timedelta(seconds=60):
-            return self.token
-        self.token = base64.b64encode(os.urandom(24)).decode('utf-8')
-        self.token_expiration = now + timedelta(seconds=expires_in)
-        db.session.add(self)
-        return self.token
-    
-    def revoke_token(self):
-        self.token_expiration = datetime.utcnow() - timedelta(seconds=1)
+    @property
+    def name(self):
+        return self.display_name or self.username
 
-    @staticmethod
-    def check_token(token):
-        user = User.query.filter_by(token=token).first()
-        if user is None or user.token_expiration < datetime.utcnow():
-            return None
-        return user
+    # Flask-Login uses this to refuse sign-in for deactivated accounts.
+    @property
+    def is_active(self):
+        return bool(self.is_active_user)
 
-    
+    def __repr__(self):
+        return f'<User {self.username}>'
+
 
 @login.user_loader
-def load_user(id):
-    return User.query.get(int(id))
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
 
-class Post(db.Model):
-    id = db.Column(db.Integer, primary_key = True)
-    body = db.Column(db.String(1000))
-    timestamp = db.Column(db.DateTime, index = True, default = datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    language = db.Column(db.String(5))
+
+class Category(db.Model):
+    __tablename__ = 'categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    slug = db.Column(db.String(100), unique=True, index=True, nullable=False)
+    description = db.Column(db.String(300))
+
+    articles = db.relationship('Article', back_populates='category',
+                               lazy='dynamic')
+
+    @property
+    def url(self):
+        return path_for('public.category', slug=self.slug)
 
     def __repr__(self):
-        return '<Post {}>'.format(self.body)
-    
+        return f'<Category {self.name}>'
 
 
-class Message(db.Model):
+class Tag(db.Model):
+    __tablename__ = 'tags'
+
     id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    body = db.Column(db.String(1000))
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    name = db.Column(db.String(60), unique=True, nullable=False)
+    slug = db.Column(db.String(80), unique=True, index=True, nullable=False)
+
+    @property
+    def url(self):
+        return path_for('public.tag', slug=self.slug)
 
     def __repr__(self):
-        return '<Message {}>'.format(self.body)
+        return f'<Tag {self.name}>'
 
-class Notification(db.Model):
+
+class Article(db.Model):
+    __tablename__ = 'articles'
+
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128), index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    timestamp = db.Column(db.Float, index=True, default=time)
-    payload_json = db.Column(db.Text)
+    title = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(220), unique=True, index=True, nullable=False)
+    summary = db.Column(db.String(400))
+    body_markdown = db.Column(db.Text, default='')
+    body_html = db.Column(db.Text, default='')
+    hero_image = db.Column(db.String(300))
+    hero_alt = db.Column(db.String(200))
 
-    def get_data(self):
-        return json.loads(str(self.payload_json))
-    
+    status = db.Column(db.String(16), default=STATUS_DRAFT, nullable=False,
+                       index=True)
+    published_at = db.Column(db.DateTime(timezone=True), index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow,
+                           onupdate=utcnow)
+
+    # Overrides the auto-generated <meta name="description">.
+    meta_description = db.Column(db.String(300))
+    reading_minutes = db.Column(db.Integer, default=1)
+
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'),
+                            index=True)
+
+    author = db.relationship('User', back_populates='articles')
+    category = db.relationship('Category', back_populates='articles')
+    tags = db.relationship('Tag', secondary=article_tags,
+                           backref=db.backref('articles', lazy='dynamic'),
+                           lazy='joined')
+
+    @property
+    def is_published(self):
+        return self.status == STATUS_PUBLISHED
+
+    @property
+    def url(self):
+        return path_for('public.article', slug=self.slug)
+
+    @property
+    def absolute_url(self):
+        from flask import current_app
+        return current_app.config['SITE_URL'] + self.url
+
+    @property
+    def description(self):
+        return self.meta_description or self.summary or ''
+
+    @staticmethod
+    def published():
+        """Select of published articles, newest first.
+
+        Returns a 2.0-style Select rather than the legacy Query, which
+        Flask-SQLAlchemy's paginate() expects and SQLAlchemy will require.
+        The date filter keeps scheduled posts hidden until their time comes.
+        """
+        return db.select(Article).where(
+            Article.status == STATUS_PUBLISHED,
+            Article.published_at.isnot(None),
+            Article.published_at <= utcnow(),
+        ).order_by(Article.published_at.desc())
+
+    def __repr__(self):
+        return f'<Article {self.slug}>'
 
 
-class Task(db.Model):
-    id = db.Column(db.String(36), primary_key=True)
-    name = db.Column(db.String(128), index=True)
-    description = db.Column(db.String(128))
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    complete = db.Column(db.Boolean, default=False)
+class Invite(db.Model):
+    """A single-use invitation. There is no public registration: an admin
+    issues one of these and the recipient sets their own password."""
 
-    def get_rq_job(self):
-        try:
-            rq_job = rq.job.Job.fetch(self.id, connection=current_app.redis)
-        except (redis.exceptions.RedisError,rq.exceptions.NoSuchJobError):
-            return None
-        return rq_job
-    
-    def get_progress(self):
-        job = self.get_rq_job()
-        return job.meta.get('progress', 0) if job is not None else 100 
+    __tablename__ = 'invites'
 
-
-class Plant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    common_name = db.Column(db.String(128), index=True)
-    sci_name = db.Column(db.String(128), index=True)
-    img_url = db.Column(db.Integer)
+    email = db.Column(db.String(190), nullable=False, index=True)
+    token = db.Column(db.String(64), unique=True, index=True, nullable=False)
+    role = db.Column(db.String(16), default=ROLE_AUTHOR, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    expires_at = db.Column(db.DateTime(timezone=True))
+    accepted_at = db.Column(db.DateTime(timezone=True))
+    invited_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    invited_by = db.relationship('User', foreign_keys=[invited_by_id])
+
+    @staticmethod
+    def create(email, role=ROLE_AUTHOR, invited_by=None, valid_days=14):
+        return Invite(
+            email=email.strip().lower(),
+            token=secrets.token_urlsafe(32),
+            role=role,
+            invited_by=invited_by,
+            expires_at=utcnow() + timedelta(days=valid_days),
+        )
+
+    @property
+    def is_pending(self):
+        if self.accepted_at is not None:
+            return False
+        expires = as_utc(self.expires_at)
+        return expires is None or expires > utcnow()
+
+    @property
+    def accept_url(self):
+        from flask import current_app
+        return current_app.config['SITE_URL'] + path_for(
+            'auth.accept_invite', token=self.token)
+
+    def __repr__(self):
+        return f'<Invite {self.email}>'

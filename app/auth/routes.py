@@ -1,82 +1,113 @@
+from urllib.parse import urlsplit
+
 from flask import render_template, redirect, url_for, flash, request
-from werkzeug.urls import url_parse
-from flask_login import login_user, logout_user, current_user
-from flask_babel import _
-from app import db
+from flask_login import login_user, logout_user, current_user, login_required
+
+from app.extensions import db
+from app.models import User, Invite, utcnow
 from app.auth import bp
-from app.auth.forms import LoginForm, RegistrationForm, \
-    ResetPasswordRequestForm, ResetPasswordForm
-from app.models import User
-from app.auth.email import send_password_reset_email
+from app.auth.forms import LoginForm, AcceptInviteForm, ProfileForm, \
+    ChangePasswordForm
+
+
+def _safe_next(target):
+    """Only follow same-site redirects, so ?next= cannot bounce off-site."""
+    if not target:
+        return None
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc:
+        return None
+    return target if target.startswith('/') else None
 
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
+        return redirect(url_for('admin.dashboard'))
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data.lower()).first()
+        ident = form.username.data.strip().lower()
+        user = User.query.filter(
+            db.or_(User.username == ident, User.email == ident)).first()
         if user is None or not user.check_password(form.password.data):
-            flash(_('Invalid username or password'))
+            # Deliberately identical message for unknown user and bad
+            # password, so this cannot be used to enumerate accounts.
+            flash('Invalid credentials.', 'error')
+            return redirect(url_for('auth.login'))
+        if not user.is_active:
+            flash('That account has been deactivated.', 'error')
             return redirect(url_for('auth.login'))
         login_user(user, remember=form.remember_me.data)
-        next_page = request.args.get('next')
-        if not next_page or url_parse(next_page).netloc != '':
-            next_page = url_for('main.index')
-        return redirect(next_page)
-    return render_template('auth/login.html', title=_('Sign In'), form=form)
+        return redirect(_safe_next(request.args.get('next'))
+                        or url_for('admin.dashboard'))
+    return render_template('auth/login.html', form=form, page_title='Sign in')
 
 
-@bp.route('/logout')
+@bp.route('/logout', methods=['POST'])
+@login_required
 def logout():
     logout_user()
-    return redirect(url_for('main.index'))
+    flash('Signed out.', 'success')
+    return redirect(url_for('public.index'))
 
 
-@bp.route('/register', methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-    form = RegistrationForm()
+@bp.route('/invite/<token>', methods=['GET', 'POST'])
+def accept_invite(token):
+    """The only route that creates an account. There is no open sign-up."""
+    invite = Invite.query.filter_by(token=token).first()
+    if invite is None or not invite.is_pending:
+        return render_template('auth/invite_invalid.html',
+                               page_title='Invitation'), 404
+
+    form = AcceptInviteForm()
     if form.validate_on_submit():
-        user = User(username=form.username.data.lower(), email=form.email.data.lower())
+        user = User(
+            username=form.username.data.strip().lower(),
+            email=invite.email,
+            display_name=(form.display_name.data or '').strip() or None,
+            role=invite.role,
+        )
         user.set_password(form.password.data)
+        invite.accepted_at = utcnow()
         db.session.add(user)
         db.session.commit()
-        flash(_('Congratulations, you are now a registered user!'))
-        return redirect(url_for('auth.login'))
-    return render_template('auth/register.html', title=_('Register'),
-                           form=form)
+        login_user(user)
+        flash('Welcome aboard. Your account is ready.', 'success')
+        return redirect(url_for('admin.dashboard'))
+
+    return render_template('auth/accept_invite.html', form=form,
+                           invite=invite, page_title='Accept invitation')
 
 
-@bp.route('/reset_password_request', methods=['GET', 'POST'])
-def reset_password_request():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-    form = ResetPasswordRequestForm()
+@bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = ProfileForm(current_user, obj=current_user)
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user:
-            send_password_reset_email(user)
-        flash(
-            _('Check your email for the instructions to reset your password'))
-        return redirect(url_for('auth.login'))
-    return render_template('auth/reset_password_request.html',
-                           title=_('Reset Password'), form=form)
-
-
-@bp.route('/reset_password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-    user = User.verify_reset_password_token(token)
-    if not user:
-        return redirect(url_for('main.index'))
-    form = ResetPasswordForm()
-    if form.validate_on_submit():
-        user.set_password(form.password.data)
+        current_user.display_name = (form.display_name.data or '').strip() or None
+        current_user.email = form.email.data.strip().lower()
+        current_user.bio = form.bio.data
         db.session.commit()
-        flash(_('Your password has been reset.'))
-        return redirect(url_for('auth.login'))
-    return render_template('auth/reset_password.html', form=form)
+        flash('Profile updated.', 'success')
+        return redirect(url_for('auth.profile'))
+    return render_template('auth/profile.html', form=form,
+                           password_form=ChangePasswordForm(),
+                           page_title='Your profile')
+
+
+@bp.route('/password', methods=['POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not current_user.check_password(form.current_password.data):
+            flash('Current password is incorrect.', 'error')
+        else:
+            current_user.set_password(form.password.data)
+            db.session.commit()
+            flash('Password changed.', 'success')
+    else:
+        for errors in form.errors.values():
+            for error in errors:
+                flash(error, 'error')
+    return redirect(url_for('auth.profile'))

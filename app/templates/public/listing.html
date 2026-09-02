@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'partials/card.html' import article_card, pagination %}
+{% from 'partials/ads.html' import ad_unit with context %}
+
+{% block content %}
+<h1 class="page-heading">{{ heading }}</h1>
+{%- if intro %}<p class="lede">{{ intro }}</p>{% endif %}
+
+<div class="layout">
+  <div class="stream">
+    {%- if articles.items %}
+    <div class="card-grid">
+      {%- for a in articles.items %}{{ article_card(a) }}{% endfor %}
+    </div>
+    {{ pagination(articles, request.endpoint, {'slug': request.view_args.slug}) }}
+    {%- else %}
+    <p class="empty">Nothing here yet.</p>
+    {%- endif %}
+  </div>
+  <aside class="sidebar">{{ ad_unit(slot_sidebar, 'ad-sidebar') }}</aside>
+</div>
+{% endblock %}

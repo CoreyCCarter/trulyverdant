@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% from 'partials/card.html' import article_card, pagination %}
+{% from 'partials/ads.html' import ad_unit with context %}
+
+{% block content %}
+{%- if articles.page == 1 %}
+<div class="hero">
+  <h1>{{ site_name }}</h1>
+  <p class="lede">{{ site_tagline }}</p>
+</div>
+{%- else %}
+<h1 class="page-heading">Articles <span class="muted">· page {{ articles.page }}</span></h1>
+{%- endif %}
+
+<div class="layout">
+  <div class="stream">
+    {%- if articles.items %}
+    <div class="card-grid">
+      {%- for a in articles.items %}
+      {{ article_card(a) }}
+      {%- endfor %}
+    </div>
+    {{ pagination(articles, 'public.index') }}
+    {%- else %}
+    <p class="empty">No articles published yet. Check back soon.</p>
+    {%- endif %}
+  </div>
+  <aside class="sidebar">
+    {{ ad_unit(slot_sidebar, 'ad-sidebar') }}
+    {%- if nav_categories %}
+    <section class="widget">
+      <h2>Topics</h2>
+      <ul class="plain">
+        {%- for c in nav_categories %}
+        <li><a href="{{ c.url }}">{{ c.name }}</a></li>
+        {%- endfor %}
+      </ul>
+    </section>
+    {%- endif %}
+  </aside>
+</div>
+{% endblock %}

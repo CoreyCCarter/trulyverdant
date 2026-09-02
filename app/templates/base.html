@@ -1,176 +1,139 @@
-{% extends 'bootstrap/base.html' %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-{% block title %}
-    {% if title %}{{ title }} - TrulyVerdant{% else %}{{ _('Welcome to TrulyVerdant') }}{% endif %}
-{% endblock %}
+{%- set meta_desc = page_description or site_description %}
+{%- set canonical = site_url + (canonical_path or request.path) %}
+<title>{% if page_title %}{{ page_title }} · {{ site_name }}{% else %}{{ site_name }} · {{ site_tagline }}{% endif %}</title>
+<meta name="description" content="{{ meta_desc }}">
+<link rel="canonical" href="{{ canonical }}">
+{%- if not seo_indexable or no_index %}
+<meta name="robots" content="noindex, nofollow">
+{%- else %}
+<meta name="robots" content="index, follow, max-image-preview:large">
+{%- endif %}
 
-{% block styles %}
-{{super()}}
-<link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
-{% endblock %}
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:type" content="{{ og_type or 'website' }}">
+<meta property="og:title" content="{{ page_title or site_name }}">
+<meta property="og:description" content="{{ meta_desc }}">
+<meta property="og:url" content="{{ canonical }}">
+{%- if og_image %}
+<meta property="og:image" content="{{ site_url }}{{ og_image }}">
+<meta name="twitter:card" content="summary_large_image">
+{%- else %}
+<meta name="twitter:card" content="summary">
+{%- endif %}
 
-{% block navbar %}
-    <nav class="navbar navbar-default" style="background-color: green;">
-        <div class="container">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a class="navbar-brand" href="{{ url_for('main.index') }}">TrulyVerdant</a>
-            </div>
-            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-                <ul class="nav navbar-nav">
-                    <li><a href="{{ url_for('main.index') }}">{{ _('Home') }}</a></li>
-                    <li><a href="{{ url_for('main.explore') }}">{{ _('Explore') }}</a></li>
-                </ul>
-                {% if g.search_form %}
-                <form class="navbar-form navbar-left" method="get" action="{{ url_for('main.search') }}">
-                    <div class="form-group">
-                        {{ g.search_form.q(size=20, class='form-control', placeholder=g.search_form.q.label.text) }}
-                    </div>
-                </form>
-                {% endif %}
-                <ul class="nav navbar-nav navbar-right">
-                    {% if current_user.is_anonymous %}
-                    <li><a href="{{ url_for('auth.login') }}">{{ _('Login') }}</a></li>
-                    {% else %}
-                    <li>
-                        <a href="{{ url_for('main.messages') }}">{{ _('Messages') }}
-                            {% set new_messages = current_user.new_messages() %}
-                            <span id="message_count" class="badge"
-                                  style="visibility: {% if new_messages %}visible
-                                                     {% else %}hidden{% endif %};">
-                                {{ new_messages }}
-                            </span>
-                        </a>
-                    </li>
-                    <li><a href="{{ url_for('main.user', username=current_user.username) }}">{{ _('Profile') }}</a></li>
-                    <li><a href="{{ url_for('auth.logout') }}">{{ _('Logout') }}</a></li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
+<link rel="alternate" type="application/rss+xml" title="{{ site_name }}" href="{{ url_for('public.feed') }}">
+<meta name="theme-color" content="#fbfaf7" id="theme-color">
+<script>
+/* Applies the saved theme before first paint to avoid a flash of the wrong
+   palette. Wrapped in try/catch: localStorage throws outright in some
+   privacy modes. */
+(function () {
+  var root = document.documentElement, saved = null;
+  try { saved = localStorage.getItem('theme'); } catch (e) {}
+  if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+  var dark = saved === 'dark' || (saved !== 'light' &&
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var m = document.getElementById('theme-color');
+  if (m) m.setAttribute('content', dark ? '#14170f' : '#fbfaf7');
+})();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🌿</text></svg>">
+
+{%- block structured_data %}{% endblock %}
+
+{%- if ads_enabled %}
+<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense_client }}" crossorigin="anonymous"></script>
+{%- endif %}
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="{{ url_for('public.index') }}">
+      <span class="brand-mark" aria-hidden="true">🌿</span>
+      <span class="brand-text">{{ site_name }}</span>
+    </a>
+    <nav id="nav" class="site-nav">
+      <a href="{{ url_for('public.index') }}">Home</a>
+      {%- for c in nav_categories[:4] %}
+      <a href="{{ c.url }}">{{ c.name }}</a>
+      {%- endfor %}
+      <a href="{{ url_for('public.about') }}">About</a>
+      <form class="nav-search" action="{{ url_for('public.search') }}" method="get" role="search">
+        <label class="visually-hidden" for="q">Search</label>
+        <input id="q" type="search" name="q" placeholder="Search…" value="{{ q or '' }}">
+      </form>
     </nav>
-{% endblock %}
-
-{% block content %}
-    <div class="container">
-        {% if current_user.is_authenticated %}
-        {% with tasks = current_user.get_tasks_in_progress() %}
-        {% if tasks %}
-            {% for task in tasks %}
-            <div class="alert alert-success" role="alert">
-                {{ task.description }}
-                <span id="{{ task.id }}-progress">{{ task.get_progress() }}</span>%
-            </div>
-            {% endfor %}
-        {% endif %}
-        {% endwith %}
-        {% endif %}
-        {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-            <div class="alert alert-info" role="alert">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-        {% endwith %}
-
-        {# application content needs to be provided in the app_content block #}
-        {% block app_content %}{% endblock %}
+    <div class="header-actions">
+      <button class="theme-toggle" id="theme-toggle" type="button"
+              aria-label="Colour theme: follow system" title="Colour theme">
+        <span class="icon icon-system" aria-hidden="true">◐</span>
+        <span class="icon icon-light" aria-hidden="true">☀</span>
+        <span class="icon icon-dark" aria-hidden="true">☾</span>
+      </button>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav"
+              aria-label="Menu">☰</button>
     </div>
-{% endblock %}
+  </div>
+</header>
 
-{% block scripts %}
-    {{ super() }}
-    {{ moment.include_moment() }}
-    {{ moment.lang(g.locale) }}
-    <script>
-        function translate(sourceElem, destElem, sourceLang, destLang) {
-            $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
-            $.post('/translate', {
-                text: $(sourceElem).text(),
-                source_language: sourceLang,
-                dest_language: destLang
-            }).done(function(response) {
-                $(destElem).text(response['text'])
-            }).fail(function() {
-                $(destElem).text("{{ _('Error: Could not contact server.') }}");
-            });
-        }
-        $(function () {
-            var timer = null;
-            var xhr = null;
-            $('.user_popup').hover(
-                function(event) {
-                    // mouse in event handler
-                    var elem = $(event.currentTarget);
-                    timer = setTimeout(function() {
-                        timer = null;
-                        xhr = $.ajax(
-                            '/user/' + elem.first().text().trim() + '/popup').done(
-                                function(data) {
-                                    xhr = null;
-                                    elem.popover({
-                                        trigger: 'manual',
-                                        html: true,
-                                        animation: false,
-                                        container: elem,
-                                        content: data
-                                    }).popover('show');
-                                    flask_moment_render_all();
-                                }
-                            );
-                    }, 1000);
-                },
-                function(event) {
-                    // mouse out event handler
-                    var elem = $(event.currentTarget);
-                    if (timer) {
-                        clearTimeout(timer);
-                        timer = null;
-                    }
-                    else if (xhr) {
-                        xhr.abort();
-                        xhr = null;
-                    }
-                    else {
-                        elem.popover('destroy');
-                    }
-                }
-            );
-        });
-        function set_message_count(n) {
-            $('#message_count').text(n);
-            $('#message_count').css('visibility', n ? 'visible' : 'hidden');
-        }
-        function set_task_progress(task_id, progress) {
-            $('#' + task_id + '-progress').text(progress);
-        }
-        {% if current_user.is_authenticated %}
-        $(function() {
-            var since = 0;
-            setInterval(function() {
-                $.ajax('{{ url_for('main.notifications') }}?since=' + since).done(
-                    function(notifications) {
-                        for (var i = 0; i < notifications.length; i++) {
-                            switch (notifications[i].name) {
-                                case 'unread_message_count':
-                                    set_message_count(notifications[i].data);
-                                    break;
-                                case 'task_progress':
-                                    set_task_progress(notifications[i].data.task_id,
-                                        notifications[i].data.progress);
-                                    break;
-                            }
-                            since = notifications[i].timestamp;
-                        }
-                    }
-                );
-            }, 10000);
-        });
-        {% endif %}
-    </script>
-{% endblock %}
+{% from 'partials/ads.html' import ad_unit with context %}
+{{ ad_unit(slot_header, 'ad-leaderboard', 'horizontal') }}
+
+<main id="main" class="wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {%- if messages %}
+    <ul class="flashes">
+      {%- for category, message in messages %}
+      <li class="flash flash-{{ category }}">{{ message }}</li>
+      {%- endfor %}
+    </ul>
+    {%- endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <div>
+      <p class="footer-brand">{{ site_name }}</p>
+      <p class="muted">{{ site_tagline }}</p>
+    </div>
+    <nav class="footer-nav" aria-label="Footer">
+      <a href="{{ url_for('public.about') }}">About</a>
+      <a href="{{ url_for('public.contact') }}">Contact</a>
+      <a href="{{ url_for('public.privacy') }}">Privacy &amp; Cookies</a>
+      <a href="{{ url_for('public.feed') }}">RSS</a>
+      {%- if current_user.is_authenticated %}
+      <a href="{{ url_for('admin.dashboard') }}">Admin</a>
+      {%- else %}
+      <a href="{{ url_for('auth.login') }}">Sign in</a>
+      {%- endif %}
+    </nav>
+  </div>
+  <p class="wrap muted copyright">© {{ now_year }} {{ site_name }}. All rights reserved.</p>
+</footer>
+
+{%- if needs_consent %}
+<div class="consent" id="consent" role="dialog" aria-live="polite" aria-label="Cookie consent">
+  <p>We use cookies to personalise content and ads, and to analyse traffic.
+     See our <a href="{{ url_for('public.privacy') }}">privacy &amp; cookie policy</a>.</p>
+  <div class="consent-actions">
+    <button type="button" data-consent="rejected" class="btn btn-quiet">Reject</button>
+    <button type="button" data-consent="accepted" class="btn">Accept</button>
+  </div>
+</div>
+{%- endif %}
+
+<script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
+</body>
+</html>

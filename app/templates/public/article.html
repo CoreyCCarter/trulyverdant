@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% from 'partials/ads.html' import ad_unit with context %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  'headline': article.title,
+  'description': article.description,
+  'datePublished': article.published_at|isodate,
+  'dateModified': (article.updated_at or article.published_at)|isodate,
+  'author': {'@type': 'Person', 'name': article.author.name,
+             'url': site_url + url_for('public.author', username=article.author.username)},
+  'publisher': {'@type': 'Organization', 'name': site_name},
+  'mainEntityOfPage': {'@type': 'WebPage', '@id': site_url + article.url}
+}
+  | combine({'image': [site_url + image_url(article.hero_image)]} if article.hero_image else {})
+  | tojson }}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="layout">
+<article class="article">
+  {%- if not article.is_published %}
+  <p class="notice">Draft preview — this is not visible to the public.</p>
+  {%- endif %}
+
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="{{ url_for('public.index') }}">Home</a>
+    {%- if article.category %} <span aria-hidden="true">/</span>
+    <a href="{{ article.category.url }}">{{ article.category.name }}</a>{% endif %}
+  </nav>
+
+  <header class="article-head">
+    <h1>{{ article.title }}</h1>
+    {%- if article.summary %}<p class="lede">{{ article.summary }}</p>{% endif %}
+    <p class="card-meta">
+      By <a href="{{ url_for('public.author', username=article.author.username) }}">{{ article.author.name }}</a>
+      · <time datetime="{{ article.published_at|isodate }}">{{ article.published_at|humandate }}</time>
+      · {{ article.reading_minutes }} min read
+      {%- if current_user.is_authenticated and (current_user.is_admin or current_user.id == article.author_id) %}
+      · <a href="{{ url_for('admin.edit_article', article_id=article.id) }}">Edit</a>
+      {%- endif %}
+    </p>
+  </header>
+
+  {%- if article.hero_image %}
+  <figure class="article-hero">
+    <img src="{{ image_url(article.hero_image, 960) }}"
+         {% if image_srcset(article.hero_image) %}srcset="{{ image_srcset(article.hero_image) }}"
+         sizes="(max-width: 800px) 100vw, 760px"{% endif %}
+         alt="{{ article.hero_alt or '' }}" width="960" height="600"
+         fetchpriority="high" decoding="async">
+    {%- if article.hero_alt %}<figcaption>{{ article.hero_alt }}</figcaption>{% endif %}
+  </figure>
+  {%- endif %}
+
+  {# body_html was sanitised on save; see app/content.py #}
+  <div class="prose">{{ body_before|safe }}</div>
+  {%- if body_after %}
+  {{ ad_unit(slot_in_article, 'ad-in-article') }}
+  <div class="prose">{{ body_after|safe }}</div>
+  {%- endif %}
+
+  {%- if article.tags %}
+  <p class="tags">
+    {%- for t in article.tags %}<a class="tag" href="{{ t.url }}">{{ t.name }}</a>{% endfor %}
+  </p>
+  {%- endif %}
+
+  {%- if article.author.bio %}
+  <aside class="author-box">
+    <h2>About {{ article.author.name }}</h2>
+    <p>{{ article.author.bio }}</p>
+  </aside>
+  {%- endif %}
+
+  {%- if related %}
+  <section class="related">
+    <h2>More in {{ article.category.name }}</h2>
+    <ul class="plain">
+      {%- for r in related %}
+      <li><a href="{{ r.url }}">{{ r.title }}</a></li>
+      {%- endfor %}
+    </ul>
+  </section>
+  {%- endif %}
+</article>
+<aside class="sidebar">{{ ad_unit(slot_sidebar, 'ad-sidebar') }}</aside>
+</div>
+{% endblock %}

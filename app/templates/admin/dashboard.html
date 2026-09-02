@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+{% include 'admin/_nav.html' %}
+<h1 class="page-heading">Dashboard</h1>
+<div class="stats">
+  <div class="stat"><span class="stat-num">{{ counts.published }}</span> published</div>
+  <div class="stat"><span class="stat-num">{{ counts.draft }}</span> drafts</div>
+</div>
+<h2>Recently updated</h2>
+{%- if articles %}
+<div class="table-scroll"><table class="table">
+  <thead><tr><th>Title</th><th>Status</th><th>Updated</th></tr></thead>
+  <tbody>
+  {%- for a in articles %}
+    <tr>
+      <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a></td>
+      <td><span class="pill pill-{{ a.status }}">{{ a.status }}</span></td>
+      <td>{{ a.updated_at|humandate }}</td>
+    </tr>
+  {%- endfor %}
+  </tbody>
+</table></div>
+{%- else %}
+<p class="empty">Nothing yet. <a href="{{ url_for('admin.new_article') }}">Write your first article.</a></p>
+{%- endif %}
+{% endblock %}

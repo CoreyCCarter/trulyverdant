@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% from 'partials/form.html' import field %}
+{% block content %}
+{% include 'admin/_nav.html' %}
+<div class="narrow panel">
+  <h1>Your profile</h1>
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+    {{ field(form.display_name) }}
+    {{ field(form.email) }}
+    {{ field(form.bio, rows=5) }}
+    {{ form.submit(class='btn') }}
+  </form>
+</div>
+<div class="narrow panel">
+  <h2>Change password</h2>
+  <form method="post" action="{{ url_for('auth.change_password') }}" novalidate>
+    {{ password_form.hidden_tag() }}
+    {{ field(password_form.current_password) }}
+    {{ field(password_form.password) }}
+    {{ field(password_form.password2) }}
+    {{ password_form.submit(class='btn') }}
+  </form>
+</div>
+{% endblock %}

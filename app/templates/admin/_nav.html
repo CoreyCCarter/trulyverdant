@@ -1,0 +1,14 @@
+<nav class="admin-nav" aria-label="Admin">
+  <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+  <a href="{{ url_for('admin.articles') }}">Articles</a>
+  {%- if current_user.is_admin %}
+  <a href="{{ url_for('admin.categories') }}">Categories</a>
+  <a href="{{ url_for('admin.people') }}">People</a>
+  {%- endif %}
+  <a href="{{ url_for('auth.profile') }}">Profile</a>
+  <a class="admin-new" href="{{ url_for('admin.new_article') }}">+ New article</a>
+  <form method="post" action="{{ url_for('auth.logout') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="linkish" type="submit">Sign out</button>
+  </form>
+</nav>

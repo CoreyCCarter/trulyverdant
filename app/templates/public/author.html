@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% from 'partials/card.html' import article_card, pagination %}
+
+{% block content %}
+<h1 class="page-heading">{{ author.name }}</h1>
+{%- if author.bio %}<p class="lede">{{ author.bio }}</p>{% endif %}
+{%- if articles.items %}
+<div class="card-grid">
+  {%- for a in articles.items %}{{ article_card(a) }}{% endfor %}
+</div>
+{{ pagination(articles, 'public.author', {'username': author.username}) }}
+{%- else %}
+<p class="empty">No published articles yet.</p>
+{%- endif %}
+{% endblock %}

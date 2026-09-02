@@ -1,0 +1,12 @@
+{% macro field(f, rows=0, autofocus=False) -%}
+<div class="field{% if f.errors %} field-error{% endif %}">
+  {{ f.label }}
+  {%- if rows %}
+  {{ f(rows=rows, **{'autofocus': autofocus} if autofocus else {}) }}
+  {%- else %}
+  {{ f(**{'autofocus': autofocus} if autofocus else {}) }}
+  {%- endif %}
+  {%- if f.description %}<p class="hint">{{ f.description }}</p>{% endif %}
+  {%- for e in f.errors %}<p class="error">{{ e }}</p>{% endfor %}
+</div>
+{%- endmacro %}

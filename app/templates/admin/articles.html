@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% from 'partials/card.html' import pagination %}
+{% block content %}
+{% include 'admin/_nav.html' %}
+<h1 class="page-heading">Articles</h1>
+<p class="filters">
+  <a href="{{ url_for('admin.articles') }}" class="{{ 'active' if not status }}">All</a>
+  <a href="{{ url_for('admin.articles', status='published') }}" class="{{ 'active' if status == 'published' }}">Published</a>
+  <a href="{{ url_for('admin.articles', status='draft') }}" class="{{ 'active' if status == 'draft' }}">Drafts</a>
+</p>
+{%- if articles.items %}
+<div class="table-scroll"><table class="table">
+  <thead><tr><th>Title</th><th>Status</th><th>Published</th><th></th></tr></thead>
+  <tbody>
+  {%- for a in articles.items %}
+    <tr>
+      <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a>
+        {%- if a.is_published %} <a class="small muted" href="{{ a.url }}">view</a>{% endif %}</td>
+      <td><span class="pill pill-{{ a.status }}">{{ a.status }}</span></td>
+      <td>{{ a.published_at|humandate or '—' }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin.delete_article', article_id=a.id) }}"
+              onsubmit="return confirm('Delete “{{ a.title|e }}” permanently?')">
+          {{ form.hidden_tag() }}
+          <button class="linkish danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {%- endfor %}
+  </tbody>
+</table></div>
+{{ pagination(articles, 'admin.articles', {'status': status} if status else {}) }}
+{%- else %}
+<p class="empty">No articles match.</p>
+{%- endif %}
+{% endblock %}

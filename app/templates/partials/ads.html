@@ -1,0 +1,23 @@
+{#
+  Renders one AdSense unit. Emits nothing at all unless a publisher id and a
+  slot id are both configured AND the visitor has consented -- so development,
+  and the pre-approval period, stay completely ad-free.
+
+  The wrapper carries a min-height so the reserved space does not shift the
+  page when the ad loads. Cumulative Layout Shift is a Core Web Vitals metric
+  and unstable layouts hurt both ranking and ad viewability.
+#}
+{% macro ad_unit(slot, css_class='', layout='rectangle') -%}
+{%- if ads_enabled and slot %}
+<aside class="ad {{ css_class }}" aria-label="Advertisement">
+  <span class="ad-label">Advertisement</span>
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="{{ adsense_client }}"
+       data-ad-slot="{{ slot }}"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</aside>
+{%- endif %}
+{%- endmacro %}

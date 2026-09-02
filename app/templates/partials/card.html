@@ -1,0 +1,38 @@
+{% macro article_card(a, heading='h2') -%}
+<article class="card">
+  {%- if a.hero_image %}
+  <a class="card-media" href="{{ a.url }}" tabindex="-1" aria-hidden="true">
+    <img src="{{ image_url(a.hero_image, 480) }}"
+         {% if image_srcset(a.hero_image) %}srcset="{{ image_srcset(a.hero_image) }}"
+         sizes="(max-width: 700px) 100vw, 340px"{% endif %}
+         alt="" loading="lazy" decoding="async" width="480" height="300">
+  </a>
+  {%- endif %}
+  <div class="card-body">
+    {%- if a.category %}
+    <a class="eyebrow" href="{{ a.category.url }}">{{ a.category.name }}</a>
+    {%- endif %}
+    <{{ heading }} class="card-title"><a href="{{ a.url }}">{{ a.title }}</a></{{ heading }}>
+    <p class="card-summary">{{ a.summary }}</p>
+    <p class="card-meta">
+      <a href="{{ url_for('public.author', username=a.author.username) }}">{{ a.author.name }}</a>
+      · <time datetime="{{ a.published_at|isodate }}">{{ a.published_at|humandate }}</time>
+      · {{ a.reading_minutes }} min read
+    </p>
+  </div>
+</article>
+{%- endmacro %}
+
+{% macro pagination(pages, endpoint, params={}) -%}
+{%- if pages and pages.pages > 1 %}
+<nav class="pagination" aria-label="Pagination">
+  {%- if pages.has_prev %}
+  <a rel="prev" href="{{ url_for(endpoint, page=pages.prev_num, **params) }}">← Newer</a>
+  {%- else %}<span class="disabled">← Newer</span>{% endif %}
+  <span class="page-count">Page {{ pages.page }} of {{ pages.pages }}</span>
+  {%- if pages.has_next %}
+  <a rel="next" href="{{ url_for(endpoint, page=pages.next_num, **params) }}">Older →</a>
+  {%- else %}<span class="disabled">Older →</span>{% endif %}
+</nav>
+{%- endif %}
+{%- endmacro %}

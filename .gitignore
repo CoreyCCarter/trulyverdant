@@ -1,48 +1,38 @@
+# Python
+__pycache__/
 *.py[cod]
-
-# C extensions
-*.so
-
-# Packages
-*.egg
-*.egg-info
-dist
-build
-eggs
-parts
-bin
-var
-sdist
-develop-eggs
-.installed.cfg
-lib
-lib64
-__pycache__
-
-# Installer logs
-pip-log.txt
-
-# Unit test / coverage reports
+*.egg-info/
+.pytest_cache/
 .coverage
-.tox
-nosetests.xml
 
-# Translations
-*.mo
-
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
-
-venv
+# Environments
+venv/
+.venv/
+# Every .env variant, but keep the committed template.
 .env
-app.db
-microblog.log*
-tv.log*
-.vscode/
-http_ca.crt
-fakeit.py
+.env.*
+!.env.example
 
-certs/
+# Local database
+*.db
+dev.db
+
+# Database backups and legacy exports. These contain real user data,
+# including password hashes -- never commit them.
+backups/
+*.dump
+*.sql.gz
+
+# One-off maintenance scripts
+scripts_drop_legacy.py
+
+# Logs
 logs/
+*.log*
+
+# Uploaded media - user content, not source
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+
+.vscode/
+.idea/

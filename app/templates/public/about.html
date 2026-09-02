@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<article class="article narrow">
+  <h1>About {{ site_name }}</h1>
+  <p class="lede">{{ site_tagline }}</p>
+  <div class="prose">
+    <p>{{ site_description }}</p>
+    <p>Everything here is written by people who actually grow the plants they
+       write about. Articles are revised as we learn more, and the update date
+       on each piece reflects the last substantive change.</p>
+    <h2>Who writes here</h2>
+    <ul>
+      {%- for a in authors %}
+      <li><a href="{{ url_for('public.author', username=a.username) }}">{{ a.name }}</a>
+        {%- if a.bio %} — {{ a.bio }}{% endif %}</li>
+      {%- endfor %}
+    </ul>
+    <h2>Get in touch</h2>
+    <p>Corrections and questions are welcome via our
+       <a href="{{ url_for('public.contact') }}">contact page</a>.</p>
+  </div>
+</article>
+{% endblock %}

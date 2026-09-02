@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% from 'partials/form.html' import field %}
+{% block content %}
+{% include 'admin/_nav.html' %}
+<h1 class="page-heading">Categories</h1>
+<div class="two-col">
+  <div>
+    {%- if categories %}
+    <div class="table-scroll"><table class="table">
+      <thead><tr><th>Name</th><th>Articles</th><th></th></tr></thead>
+      <tbody>
+      {%- for c in categories %}
+        <tr>
+          <td><a href="{{ c.url }}">{{ c.name }}</a>
+            {%- if c.description %}<br><span class="small muted">{{ c.description }}</span>{% endif %}</td>
+          <td>{{ c.articles.count() }}</td>
+          <td>
+            <form method="post" action="{{ url_for('admin.delete_category', category_id=c.id) }}"
+                  onsubmit="return confirm('Delete this category? Its articles are kept but become uncategorised.')">
+              {{ confirm.hidden_tag() }}
+              <button class="linkish danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {%- endfor %}
+      </tbody>
+    </table></div>
+    {%- else %}<p class="empty">No categories yet.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <h2 class="panel-title">Add a category</h2>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+      {{ field(form.name) }}
+      {{ field(form.description, rows=3) }}
+      {{ form.submit(class='btn') }}
+    </form>
+  </div>
+</div>
+{% endblock %}

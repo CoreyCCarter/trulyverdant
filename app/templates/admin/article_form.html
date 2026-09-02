@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% from 'partials/form.html' import field %}
+{% block content %}
+{% include 'admin/_nav.html' %}
+<h1 class="page-heading">{{ 'Edit article' if article else 'New article' }}</h1>
+
+<form method="post" enctype="multipart/form-data" novalidate class="editor">
+  {{ form.hidden_tag() }}
+  <div class="editor-main">
+    {{ field(form.title, autofocus=not article) }}
+    {{ field(form.summary, rows=2) }}
+
+    <div class="field">
+      {{ form.body_markdown.label }}
+      <div class="editor-tabs" role="tablist">
+        <button type="button" class="tab active" data-pane="write" role="tab">Write</button>
+        <button type="button" class="tab" data-pane="preview" role="tab">Preview</button>
+        <span class="hint inline">Markdown: <code>## heading</code>, <code>**bold**</code>,
+          <code>[link](url)</code>, <code>![alt](image-url)</code></span>
+      </div>
+      <div id="pane-write">{{ form.body_markdown(rows=24, id='body-source') }}</div>
+      <div id="pane-preview" class="prose preview-pane" hidden></div>
+      {%- for e in form.body_markdown.errors %}<p class="error">{{ e }}</p>{% endfor %}
+    </div>
+  </div>
+
+  <aside class="editor-side">
+    <div class="panel">
+      {{ field(form.status) }}
+      {{ field(form.published_at) }}
+      {{ form.submit(class='btn btn-block') }}
+      {%- if article and article.is_published %}
+      <p class="small"><a href="{{ article.url }}">View on site →</a></p>
+      {%- elif article %}
+      <p class="small"><a href="{{ article.url }}">Preview draft →</a></p>
+      {%- endif %}
+    </div>
+    <div class="panel">
+      {{ field(form.category) }}
+      {{ field(form.tags) }}
+    </div>
+    <div class="panel">
+      <h2 class="panel-title">Header image</h2>
+      {%- if article and article.hero_image %}
+      <img class="thumb" src="{{ image_url(article.hero_image, 480) }}" alt="" width="240">
+      <label class="check">{{ form.remove_hero }} {{ form.remove_hero.label.text }}</label>
+      {%- endif %}
+      {{ field(form.hero) }}
+      {{ field(form.hero_alt) }}
+    </div>
+    <div class="panel">
+      <h2 class="panel-title">Search appearance</h2>
+      {{ field(form.slug) }}
+      {{ field(form.meta_description, rows=3) }}
+    </div>
+  </aside>
+</form>
+
+<script type="module">
+// Live preview. Renders on the server so what you see is exactly the
+// sanitised HTML that will be stored -- no second Markdown implementation
+// in the browser to drift out of sync.
+const src = document.getElementById('body-source');
+const pane = document.getElementById('pane-preview');
+const write = document.getElementById('pane-write');
+const tabs = document.querySelectorAll('.tab');
+let timer = null, lastRendered = null;
+
+tabs.forEach(t => t.addEventListener('click', () => {
+  tabs.forEach(x => x.classList.toggle('active', x === t));
+  const preview = t.dataset.pane === 'preview';
+  write.hidden = preview;
+  pane.hidden = !preview;
+  if (preview) render();
+}));
+
+async function render() {
+  if (src.value === lastRendered) return;
+  lastRendered = src.value;
+  pane.innerHTML = '<p class="muted">Rendering…</p>';
+  try {
+    const r = await fetch('{{ url_for('admin.preview') }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({markdown: src.value})
+    });
+    if (!r.ok) throw new Error(r.status);
+    pane.innerHTML = (await r.json()).html || '<p class="muted">Nothing to preview.</p>';
+  } catch (e) {
+    pane.innerHTML = '<p class="error">Preview failed.</p>';
+  }
+}
+src.addEventListener('input', () => {
+  clearTimeout(timer);
+  if (!pane.hidden) timer = setTimeout(render, 400);
+});
+</script>
+{% endblock %}
