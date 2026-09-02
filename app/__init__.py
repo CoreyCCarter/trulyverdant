@@ -25,6 +25,13 @@ def create_app(config_class=Config):
     # so the development server and the test client still work over http.
     if app.debug or app.testing:
         app.config['SESSION_COOKIE_SECURE'] = False
+    elif not app.config['SESSION_COOKIE_SECURE']:
+        # Easy to leave switched on after local http testing, and the
+        # consequence -- session cookies sent in the clear -- is invisible.
+        app.logger.warning(
+            'SESSION_COOKIE_SECURE is false outside debug. Session cookies '
+            'will be sent over plain http. Remove the override from .env '
+            'once TLS is in place.')
 
     # Behind nginx, honour X-Forwarded-* so url_for(_external=True),
     # request.is_secure and the Secure cookie flag reflect the real request

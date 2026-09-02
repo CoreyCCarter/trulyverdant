@@ -159,6 +159,26 @@ sudo supervisorctl status trulyverdant
 curl -I http://localhost/
 ```
 
+### Letting deploy.sh restart the app without sudo
+
+Supervisor's control socket is `0700 root:root` by default, so
+`supervisorctl` — and therefore `deploy.sh`'s restart step — only works as
+root. Running the whole deploy as root is worse: `git pull` and `pip
+install` would leave root-owned files in the checkout. Grant just socket
+access instead:
+
+```bash
+sudo sed -i 's|^chmod=0700.*|chmod=0770\nchown=root:YOUR_USER|' \
+    /etc/supervisor/supervisord.conf
+sudo systemctl restart supervisor
+supervisorctl status trulyverdant     # now works unprivileged
+```
+
+`deploy.sh` falls back to `sudo -n supervisorctl` if that is permitted, and
+otherwise says so plainly and **exits non-zero** rather than reporting a
+success it did not achieve — the new code is not live until the app
+restarts.
+
 For production, run certbot and uncomment the two `ssl_certificate` lines in
 `/etc/nginx/sites-available/trulyverdant` before reloading.
 

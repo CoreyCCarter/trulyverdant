@@ -24,7 +24,7 @@ SUPERVISOR_PROGRAM="${SUPERVISOR_PROGRAM:-trulyverdant}"
 BRANCH="${BRANCH:-main}"
 HEALTH_URL="${HEALTH_URL:-}"
 
-DO_PULL=1; DO_ALL=1; DRY_RUN=0; ROLLBACK=0
+DO_PULL=1; DO_ALL=1; DRY_RUN=0; ROLLBACK=0; RESTARTED=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -179,14 +179,41 @@ rollback() {
 
 have_supervisor() { command -v supervisorctl >/dev/null 2>&1; }
 
-supervisor_has_program() {
-  have_supervisor && supervisorctl status "$SUPERVISOR_PROGRAM" >/dev/null 2>&1
+# supervisorctl, escalating only if the socket is not readable as this user.
+# Supervisor's socket defaults to 0700 root:root, so an unprivileged deploy
+# gets PermissionError -- which must NOT be reported as "program missing".
+SUPERVISORCTL=""
+resolve_supervisorctl() {
+  [[ -n "$SUPERVISORCTL" ]] && return 0
+  have_supervisor || return 1
+  local out
+  if out="$(supervisorctl status "$SUPERVISOR_PROGRAM" 2>&1)"; then
+    SUPERVISORCTL="supervisorctl"; return 0
+  fi
+  if [[ "$out" == *PermissionError* || "$out" == *"Permission denied"* ]]; then
+    if sudo -n supervisorctl status "$SUPERVISOR_PROGRAM" >/dev/null 2>&1; then
+      SUPERVISORCTL="sudo -n supervisorctl"; return 0
+    fi
+    warn "supervisorctl needs root: supervisor's socket is not readable by $USER."
+    warn "Grant access once (see README), or run this script with sudo."
+    return 1
+  fi
+  # Reached supervisor fine; it simply does not know this program.
+  if [[ "$out" == *"no such process"* || "$out" == *ERROR* ]]; then
+    warn "supervisor is reachable but has no program '$SUPERVISOR_PROGRAM'."
+    warn "Install it with: sudo ./deploy/install-services.sh --local"
+    return 1
+  fi
+  warn "supervisorctl failed: $out"
+  return 1
 }
+
+supervisor_has_program() { resolve_supervisorctl; }
 
 stop_app() {
   if supervisor_has_program; then
     log "Stopping $SUPERVISOR_PROGRAM"
-    run supervisorctl stop "$SUPERVISOR_PROGRAM"
+    run $SUPERVISORCTL stop "$SUPERVISOR_PROGRAM"
   else
     warn "supervisor program '$SUPERVISOR_PROGRAM' not found; skipping stop"
   fi
@@ -195,7 +222,7 @@ stop_app() {
 start_app() {
   if supervisor_has_program; then
     log "Starting $SUPERVISOR_PROGRAM"
-    run supervisorctl start "$SUPERVISOR_PROGRAM"
+    run $SUPERVISORCTL start "$SUPERVISOR_PROGRAM"
   fi
 }
 
@@ -203,16 +230,16 @@ restart_app() {
   if supervisor_has_program; then
     log "Restarting $SUPERVISOR_PROGRAM"
     # Graceful: existing workers finish their request before exiting.
-    run supervisorctl restart "$SUPERVISOR_PROGRAM"
-    sleep 2
+    run $SUPERVISORCTL restart "$SUPERVISOR_PROGRAM"
+    sleep 3
     if [[ $DRY_RUN -eq 0 ]]; then
-      supervisorctl status "$SUPERVISOR_PROGRAM" | grep -q RUNNING \
+      $SUPERVISORCTL status "$SUPERVISOR_PROGRAM" | grep -q RUNNING \
         || die "$SUPERVISOR_PROGRAM did not come back up. Check its logs."
       ok "running"
     fi
+    RESTARTED=1
   else
-    warn "supervisor program '$SUPERVISOR_PROGRAM' not configured."
-    warn "Install deploy/supervisor.conf, or restart the app yourself."
+    warn "Skipping restart -- the new code is NOT live yet."
   fi
 }
 
@@ -273,4 +300,10 @@ if [[ -n "$HEALTH_URL" && $DRY_RUN -eq 0 ]]; then
   done
 fi
 
-log "Deployed successfully."
+if [[ $RESTARTED -eq 1 || $DRY_RUN -eq 1 ]]; then
+  log "Deployed successfully."
+else
+  warn "Finished, but the app was NOT restarted -- it is still running the"
+  warn "previous code. Restart it, then re-check the site."
+  exit 1
+fi

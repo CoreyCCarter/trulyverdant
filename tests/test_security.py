@@ -215,23 +215,48 @@ def test_session_cookie_flags_are_actually_applied(app):
     assert app.config['SESSION_COOKIE_SAMESITE'] == 'Lax'
 
 
-def test_session_cookie_is_secure_outside_debug(monkeypatch):
+def test_session_cookie_secure_survives_create_app(monkeypatch):
+    """create_app must not quietly clear Secure outside debug/testing.
+
+    Set explicitly rather than relying on the ambient .env, which may carry
+    SESSION_COOKIE_SECURE=false for local http development.
+    """
     from app import create_app
     from config import Config
 
     class Prod(Config):
         SECRET_KEY = 'not-the-dev-default'
         SQLALCHEMY_DATABASE_URI = 'sqlite://'
+        SESSION_COOKIE_SECURE = True
 
     prod = create_app(Prod)
     assert prod.config['SESSION_COOKIE_SECURE'] is True, \
-        'session cookie must carry Secure when not in debug/testing'
+        'session cookie must keep Secure when not in debug/testing'
 
 
-def test_secure_cookie_can_be_disabled_for_local_http(monkeypatch):
-    monkeypatch.setenv('SESSION_COOKIE_SECURE', 'false')
-    import importlib, config as config_module
-    importlib.reload(config_module)
-    assert config_module.Config.SESSION_COOKIE_SECURE is False
-    monkeypatch.delenv('SESSION_COOKIE_SECURE')
-    importlib.reload(config_module)
+def test_secure_cookie_defaults_to_true_when_env_unset():
+    """Unset must mean Secure. Tests the decision directly: reloading the
+    config module cannot isolate this, because load_dotenv repopulates the
+    environment from .env, which may carry a local-http override."""
+    from config import _bool
+    assert _bool(None, True) is True          # env var absent -> Secure
+    assert _bool('false', True) is False      # explicit opt-out honoured
+    assert _bool('true', True) is True
+
+
+def test_insecure_cookie_outside_debug_is_logged(caplog):
+    """Serving https with a non-Secure session cookie is invisible in
+    behaviour, so it must be loud in the logs."""
+    import logging
+    from app import create_app
+    from config import Config
+
+    class Sloppy(Config):
+        SECRET_KEY = 'not-the-dev-default'
+        SQLALCHEMY_DATABASE_URI = 'sqlite://'
+        SESSION_COOKIE_SECURE = False
+
+    with caplog.at_level(logging.WARNING):
+        create_app(Sloppy)
+    assert any('SESSION_COOKIE_SECURE is false' in r.message
+               for r in caplog.records)
