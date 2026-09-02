@@ -4,10 +4,10 @@
 #
 #   sudo ./deploy/install-services.sh
 #
-# Installs the supervisor program for THIS checkout, rewriting the shipped
-# template to use its real path and owner instead of /srv/trulyverdant and
-# www-data -- www-data cannot read a home directory, which is the usual
-# reason a first install fails to start.
+# Fills the __APP_DIR__ and __APP_USER__ placeholders in the shipped
+# supervisor template from this checkout's real location and owner, so the
+# app runs as whoever owns the code. A home-directory checkout is fine:
+# supervisor runs as root and can read it regardless of its mode.
 #
 # This host runs the application only. nginx lives on the public VPS and
 # reaches gunicorn over WireGuard; see deploy/nginx-vps.conf.
@@ -34,8 +34,8 @@ rm -rf /run/trulyverdant
 echo "  ok log dir (loopback TCP upstream; no socket dir needed)"
 
 # --- supervisor ----------------------------------------------------------
-sed -e "s#/srv/trulyverdant#$APP_DIR#g" \
-    -e "s#^user=www-data#user=$APP_USER#" \
+sed -e "s#__APP_DIR__#$APP_DIR#g" \
+    -e "s#__APP_USER__#$APP_USER#g" \
     "$APP_DIR/deploy/supervisor.conf" > /etc/supervisor/conf.d/trulyverdant.conf
 echo "  ok /etc/supervisor/conf.d/trulyverdant.conf"
 

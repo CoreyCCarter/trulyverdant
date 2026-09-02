@@ -164,34 +164,30 @@ that becomes slow once there are real images, add a `proxy_cache` to the
 The config returns a plain 503 page rather than a raw 502 when the tunnel is
 down.
 
-### Wiring up nginx + supervisor
+### Wiring up supervisor
 
-Nothing is served until the units are installed — supervisor with no program
-config manages nothing, and nginx keeps showing its default page. One script
-adapts the templates to this checkout's real path and owner and installs
-them:
+Nothing runs until the supervisor program is installed — supervisor with no
+program config manages nothing. One script installs it, filling the
+`__APP_DIR__` and `__APP_USER__` placeholders from this checkout's real
+location and owner:
 
 ```bash
-sudo ./deploy/install-services.sh --local        # http on localhost, for dev
-sudo ./deploy/install-services.sh example.com    # production, TLS placeholders
+sudo ./deploy/install-services.sh
 ```
 
-It creates `/run/trulyverdant` and `/var/log/trulyverdant`, adds a
-`tmpfiles.d` entry so the socket directory survives a reboot (`/run` is
-tmpfs), installs both configs, removes nginx's default site, then runs
-`nginx -t` and `supervisorctl update`.
-
-The templates ship with `/srv/trulyverdant` and `user=www-data`. The script
-rewrites both to the checkout's actual path and owner — `www-data` cannot
-read a home directory, which is the usual reason a hand-rolled first install
-fails to start.
+It creates `/var/log/trulyverdant`, installs the program, and restarts it.
+A home-directory checkout is fine: supervisor runs as root and can read it
+whatever its mode, and gunicorn then runs as the user who owns the code.
 
 Afterwards:
 
 ```bash
-sudo supervisorctl status trulyverdant
-curl -I http://localhost/
+sudo supervisorctl status trulyverdant       # expect RUNNING
+curl -I http://$GUNICORN_BIND/               # the address from .env
 ```
+
+nginx is installed separately on the VPS — see
+[docs/PRODUCTION.md](docs/PRODUCTION.md) §3.
 
 ### Letting deploy.sh restart the app without sudo
 

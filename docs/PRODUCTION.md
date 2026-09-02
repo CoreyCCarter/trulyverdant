@@ -38,7 +38,7 @@ sudo apt install python3-venv postgresql-client supervisor
 Create a **new, empty** database. Do not reuse the development one.
 
 ```sql
-CREATE DATABASE trulyverdant;
+CREATE DATABASE tvprod;
 CREATE USER trulyverdant WITH PASSWORD '<generate one>';
 GRANT ALL PRIVILEGES ON DATABASE trulyverdant TO trulyverdant;
 ```
@@ -46,16 +46,20 @@ GRANT ALL PRIVILEGES ON DATABASE trulyverdant TO trulyverdant;
 ### 2.3 Checkout
 
 ```bash
-sudo install -d -o "$USER" -g "$USER" /srv/trulyverdant
-git clone git@github.com:CoreyCCarter/trulyverdant.git /srv/trulyverdant
-cd /srv/trulyverdant
+git clone git@github.com:CoreyCCarter/trulyverdant.git ~/trulyverdant
+cd ~/trulyverdant
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
 
-`/srv` avoids the home-directory permission problem entirely. If you deploy
-into a home directory instead, whichever user runs gunicorn must be able to
-read the checkout.
+A home-directory checkout needs no permission changes here. Supervisor runs
+as root and can read it whatever its mode, and it launches gunicorn as the
+user who owns the code — so the app reads its own files as itself. Nothing
+else needs access, because nginx is on the VPS and never touches this disk.
+
+(If you previously ran a local nginx against a home checkout and loosened
+`/home/<user>` with `chmod o+x`, that is no longer needed. `chmod 750
+/home/<user>` puts it back.)
 
 ### 2.4 Configuration
 
@@ -141,19 +145,25 @@ curl -I http://10.8.0.2:8000/
 
 ```bash
 sudo apt install nginx certbot python3-certbot-nginx
+git clone git@github.com:CoreyCCarter/trulyverdant.git ~/trulyverdant
+cd ~/trulyverdant
 ```
 
-Copy `deploy/nginx-vps.conf` across, replacing both placeholders:
-
-- `SERVER_NAME_HERE` → your domain
-- `APP_WG_IP` → `10.8.0.2`
+The VPS only needs the repo for the nginx config — no venv, no `.env`, no
+database. Fill in both placeholders, then install:
 
 ```bash
-sudo cp nginx-vps.conf /etc/nginx/sites-available/trulyverdant
+sed -e 's/SERVER_NAME_HERE/yourdomain.com/g' \
+    -e 's/APP_WG_IP/10.8.0.2/g' \
+    deploy/nginx-vps.conf | sudo tee /etc/nginx/sites-available/trulyverdant
+
 sudo ln -s /etc/nginx/sites-available/trulyverdant /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 ```
+
+Keeping the checkout means `git pull` picks up future changes to the nginx
+config; re-run the `sed` above to reinstall it.
 
 ### 3.2 TLS
 
@@ -201,7 +211,7 @@ Nothing there is correct. A hit means fix `.env` and restart.
 deploy. Add a daily job:
 
 ```cron
-17 3 * * * cd /srv/trulyverdant && ./deploy.sh --backup >> /var/log/trulyverdant/backup.log 2>&1
+17 3 * * * cd $HOME/trulyverdant && ./deploy.sh --backup >> /var/log/trulyverdant/backup.log 2>&1
 ```
 
 Backups land in `backups/` (last 10 kept, `KEEP_BACKUPS` to change) and
@@ -219,7 +229,7 @@ confirm. Prove it works while nothing is on fire.
 ## 6. Deploying changes
 
 ```bash
-cd /srv/trulyverdant
+cd ~/trulyverdant
 HEALTH_URL=https://yourdomain.com/ ./deploy.sh
 ```
 
