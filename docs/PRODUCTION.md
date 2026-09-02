@@ -72,6 +72,34 @@ python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
 
+#### If the clone fails with "Could not read from remote repository"
+
+Almost always one of these. Diagnose as `verdant`, not root:
+
+```bash
+whoami                 # must be verdant
+echo $HOME             # must be /home/verdant
+ssh -T git@github.com  # success prints "Hi <repo>! You've successfully authenticated"
+```
+
+| Cause | Check | Fix |
+| --- | --- | --- |
+| Cloned as the wrong user | `whoami` says `root` | `sudo git clone` reads `/root/.ssh`, never `/home/verdant/.ssh`. Clone as `verdant`: `sudo -u verdant -i` first. |
+| Key permissions too open | `stat -c '%a' ~/.ssh ~/.ssh/id_ed25519` | ssh silently ignores loose keys. `chmod 700 ~/.ssh && chmod 600 ~/.ssh/id_ed25519` |
+| HTTPS URL | the clone URL starts `https://` | Deploy keys only work over SSH. Use `git@github.com:CoreyCCarter/trulyverdant.git` |
+| Key not offered | `ssh -vT git@github.com 2>&1 \| grep -i offering` lists nothing | A non-default filename is not tried automatically. Add to `~/.ssh/config`:<br>`Host github.com`<br>`  IdentityFile ~/.ssh/<name>`<br>`  IdentitiesOnly yes` |
+| Public key not actually installed | GitHub → repo → Settings → Deploy keys | Paste the contents of the `.pub` file. Pasting the private key by mistake looks similar at a glance and never works. |
+| Key already used elsewhere | GitHub rejected it when adding | A deploy key may belong to only one repository. Generate a fresh keypair for this repo. |
+
+Generate a key as `verdant` if you need a new one:
+
+```bash
+ssh-keygen -t ed25519 -C "verdant@$(hostname)" -f ~/.ssh/id_ed25519 -N ""
+cat ~/.ssh/id_ed25519.pub      # add this at Settings -> Deploy keys
+```
+
+Read-only access is sufficient; deploys only pull.
+
 The checkout must be **owned by `verdant`** — `install-services.sh` reads
 its owner to decide which user gunicorn runs as. If you cloned as root by
 mistake, fix it before continuing:
