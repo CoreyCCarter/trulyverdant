@@ -256,8 +256,20 @@ if [[ $DO_ALL -eq 0 ]]; then ok "Backup only; stopping here."; exit 0; fi
 
 # 2. Refuse to clobber uncommitted work.
 if [[ $DO_PULL -eq 1 ]]; then
-  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-    die "Working tree has uncommitted changes. Commit, stash, or use --no-pull."
+  DIRTY="$(git status --porcelain --untracked-files=no)"
+  if [[ -n "$DIRTY" ]]; then
+    warn "Working tree has uncommitted changes:"
+    printf '%s\n' "$DIRTY" | sed 's/^/     /'
+    # A checkout made as one user and then chowned commonly differs only in
+    # the executable bit, which `git status` shows but is easy to miss.
+    if ! printf '%s\n' "$DIRTY" | grep -qv '^ M '; then
+      if [[ -n "$(git diff --summary | grep -c 'mode change' || true)" ]] && \
+         [[ "$(git diff --summary | grep -c 'mode change')" != "0" ]]; then
+        warn "These are file MODE changes only (permission bits), not content."
+        warn "Fix with:  git config core.fileMode false"
+      fi
+    fi
+    die "Commit, stash, or use --no-pull."
   fi
   BEFORE="$(git rev-parse HEAD)"
   log "Pulling origin/$BRANCH"
