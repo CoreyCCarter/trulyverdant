@@ -6,6 +6,18 @@ only in their .env values, not in how the app is served.
 import multiprocessing
 import os
 
+from dotenv import load_dotenv
+
+# Gunicorn reads this file before importing the application, so nothing has
+# loaded .env yet -- config.py does that, and it runs later. Without this,
+# every GUNICORN_* setting in .env is silently ignored and the defaults
+# below win, which looks exactly like the app failing to listen.
+_here = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() \
+    else os.getcwd()
+_root = os.path.dirname(_here) if os.path.basename(_here) == 'deploy' else _here
+# override=False: a real environment variable still beats the file.
+load_dotenv(os.path.join(_root, '.env'), override=False)
+
 # nginx runs on a separate VPS and reaches this process over WireGuard, so
 # the bind address must be this host's WireGuard address -- e.g.
 # GUNICORN_BIND=10.8.0.2:8000 in .env.
