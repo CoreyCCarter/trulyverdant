@@ -116,9 +116,14 @@ because nginx is on the VPS and never touches this disk.
 ### 2.4 Configuration
 
 ```bash
-cp .env.example .env
+cp .env.example .env    # copy, do not move
 chmod 600 .env          # it holds the database password and secret key
 ```
+
+`.env.example` is tracked in git and must stay. Moving it instead of copying
+leaves a deleted tracked file, and `deploy.sh` then refuses to pull over a
+dirty tree. If that happens: `git restore .env.example` — your `.env` is
+gitignored and is not affected.
 
 Fill it in. These **must** differ from development:
 
