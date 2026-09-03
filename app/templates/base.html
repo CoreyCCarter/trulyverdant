@@ -113,10 +113,10 @@
       <a href="{{ url_for('public.contact') }}">Contact</a>
       <a href="{{ url_for('public.privacy') }}">Privacy &amp; Cookies</a>
       <a href="{{ url_for('public.feed') }}">RSS</a>
+      {#- No sign-in link: /auth/login is reachable only by typing it.
+          Signed-in staff still get a way back to the admin area. -#}
       {%- if current_user.is_authenticated %}
       <a href="{{ url_for('admin.dashboard') }}">Admin</a>
-      {%- else %}
-      <a href="{{ url_for('auth.login') }}">Sign in</a>
       {%- endif %}
     </nav>
   </div>

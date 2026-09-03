@@ -58,3 +58,37 @@ def test_canonical_and_description_present(client, author, make_article):
     assert f'<link rel="canonical" href="https://example.test{a.url}">' in html
     assert '<meta name="description"' in html
     assert 'application/ld+json' in html
+
+
+# --- login is unlisted ----------------------------------------------------
+
+def test_no_public_page_links_to_login(client, author, make_article,
+                                       category):
+    """The sign-in URL must be reachable only by typing it. Nothing a reader
+    can see should advertise it."""
+    make_article(author, title='Listed', category=category)
+    for path in ['/', '/about', '/contact', '/privacy', '/search',
+                 f'/category/{category.slug}', '/author/authoruser']:
+        html = client.get(path).get_data(as_text=True)
+        assert '/auth/login' not in html, f'{path} links to the login page'
+
+
+def test_login_still_reachable_directly(client):
+    assert client.get('/auth/login').status_code == 200
+
+
+def test_auth_pages_are_noindex(client):
+    """Otherwise the login form turns up in search results, which defeats
+    the point of keeping it unlisted."""
+    assert b'noindex' in client.get('/auth/login').data
+
+
+def test_signed_in_staff_still_get_an_admin_link(client, login, author,
+                                                 make_article):
+    make_article(author, title='Anything')
+    login('authoruser')
+    assert '/admin/' in client.get('/').get_data(as_text=True)
+
+
+def test_robots_disallows_auth(client):
+    assert 'Disallow: /auth/' in client.get('/robots.txt').get_data(as_text=True)
