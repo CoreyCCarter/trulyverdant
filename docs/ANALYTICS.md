@@ -10,8 +10,14 @@ browser ──▶ trulyverdant.com/stats.js   ─┐
             trulyverdant.com/api/send   ─┴─▶ nginx ──▶ umami (127.0.0.1:3000)
 ```
 
-Umami runs on the **VPS**, not the app server, so tracker traffic never
-crosses the WireGuard tunnel.
+Umami runs on the **same single VPS** you already have — the one holding the
+WireGuard endpoint and terminating TLS to make the site reachable. It is not
+a second server: it is one more container on that box, bound to
+`127.0.0.1:3000`, with the nginx already running there proxying two paths to
+it.
+
+Keeping it there rather than on the app server means tracker traffic never
+crosses the WireGuard tunnel or touches your home network.
 
 ---
 

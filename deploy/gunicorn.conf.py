@@ -18,8 +18,9 @@ _root = os.path.dirname(_here) if os.path.basename(_here) == 'deploy' else _here
 # override=False: a real environment variable still beats the file.
 load_dotenv(os.path.join(_root, '.env'), override=False)
 
-# nginx runs on a separate VPS and reaches this process over WireGuard, so
-# the bind address must be this host's WireGuard address -- e.g.
+# nginx runs on the VPS -- a different host from this one -- and reaches
+# this process over WireGuard, so the bind address must be this host's
+# WireGuard address -- e.g.
 # GUNICORN_BIND=10.8.0.2:8000 in .env.
 #
 # Do NOT bind 0.0.0.0. There is no authentication in front of the app, and
