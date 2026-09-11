@@ -100,7 +100,16 @@ def register_template_helpers(app):
 
     @app.context_processor
     def inject_globals():
+        from flask_login import current_user
         cfg = app.config
+
+        # Cookieless, so no consent gate. Excluded for signed-in staff and
+        # for the admin and auth areas: at low traffic your own visits
+        # otherwise dominate the numbers you are trying to read.
+        analytics_enabled = bool(
+            cfg['UMAMI_SCRIPT_URL'] and cfg['UMAMI_WEBSITE_ID']
+            and not current_user.is_authenticated
+            and not request.path.startswith(('/admin', '/auth')))
         # Ads need a publisher id, and are withheld until consent when
         # consent is required. Templates check `ads_enabled` before
         # emitting any Google script.
@@ -124,6 +133,9 @@ def register_template_helpers(app):
             'slot_header': cfg['ADSENSE_SLOT_HEADER'],
             'slot_in_article': cfg['ADSENSE_SLOT_IN_ARTICLE'],
             'slot_sidebar': cfg['ADSENSE_SLOT_SIDEBAR'],
+            'analytics_enabled': analytics_enabled,
+            'umami_script_url': cfg['UMAMI_SCRIPT_URL'],
+            'umami_website_id': cfg['UMAMI_WEBSITE_ID'],
             'nav_categories': Category.query.order_by(Category.name).all(),
             'now_year': datetime.now(timezone.utc).year,
         }

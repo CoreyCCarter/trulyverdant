@@ -112,6 +112,15 @@ def _preflight_checks(app):
     else:
         yield 'fail', 'upload folder', f'{updir} is not writable'
 
+    # --- analytics -------------------------------------------------------
+    if cfg.get('UMAMI_SCRIPT_URL') and cfg.get('UMAMI_WEBSITE_ID'):
+        yield 'ok', 'analytics', f"umami at {cfg['UMAMI_SCRIPT_URL']}"
+    elif cfg.get('UMAMI_SCRIPT_URL') or cfg.get('UMAMI_WEBSITE_ID'):
+        yield 'fail', 'analytics', \
+            'needs BOTH UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID'
+    else:
+        yield 'warn', 'analytics', 'not configured -- no traffic data at all'
+
     # --- advertising (informational) -------------------------------------
     if cfg.get('ADSENSE_CLIENT_ID'):
         if cfg.get('ADS_TXT'):

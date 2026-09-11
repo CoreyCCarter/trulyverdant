@@ -71,6 +71,14 @@ class Config:
     # Discourage indexing of a staging deployment.
     SEO_INDEXABLE = _bool(os.environ.get('SEO_INDEXABLE'), True)
 
+    # --- Analytics ----------------------------------------------------------
+    # Umami is cookieless, so it needs no consent gate and reports on all
+    # traffic rather than only the share that accepts cookies. Serve the
+    # script from this domain (see docs/ANALYTICS.md) -- a third-party
+    # tracker URL is stripped by most blockers.
+    UMAMI_SCRIPT_URL = os.environ.get('UMAMI_SCRIPT_URL', '').strip()
+    UMAMI_WEBSITE_ID = os.environ.get('UMAMI_WEBSITE_ID', '').strip()
+
     # --- Session cookie -----------------------------------------------------
     # These must be set as real config values. Flask already defines all
     # three keys, so app.config.setdefault() on them is silently a no-op.

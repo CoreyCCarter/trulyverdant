@@ -1,0 +1,44 @@
+# Umami analytics. Runs on the PUBLIC VPS, not the app server -- that keeps
+# tracker traffic off the WireGuard tunnel entirely.
+#
+#   cd deploy/umami
+#   cp .env.example .env      # set POSTGRES_PASSWORD and APP_SECRET
+#   docker compose up -d
+#
+# It binds 127.0.0.1 only. nginx proxies the two public paths it needs
+# (see docs/ANALYTICS.md); the dashboard stays unreachable from the internet.
+
+services:
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    restart: unless-stopped
+    # Loopback only. Nothing here should be directly reachable.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: postgresql://umami:${POSTGRES_PASSWORD}@db:5432/umami
+      DATABASE_TYPE: postgresql
+      APP_SECRET: ${APP_SECRET}
+      # Umami sits behind nginx, so trust its forwarded headers for geo.
+      TRACKER_SCRIPT_NAME: script
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - umami-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  umami-db:
