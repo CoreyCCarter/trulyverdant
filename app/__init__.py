@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request
+from flask import Flask, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import Config, DEV_SECRET_KEY
@@ -73,6 +73,22 @@ def create_app(config_class=Config):
         response.headers.setdefault('Referrer-Policy',
                                     'strict-origin-when-cross-origin')
         response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+
+        # Static assets are proxied through the app (nginx is on another
+        # host), so without this every image revalidates on every page view
+        # and crosses the tunnel again. Uploads are content-addressed by a
+        # random stem and versioned assets carry ?v=, so neither filename is
+        # ever reused -- both are safe to cache indefinitely.
+        # Only on success: a year-long immutable cache on a 404 would
+        # poison the browser cache for a URL that later becomes valid.
+        if request.path.startswith('/static/') and \
+                response.status_code in (200, 206, 304):
+            if request.path.startswith('/static/uploads/') or \
+                    request.args.get('v'):
+                response.headers['Cache-Control'] = \
+                    'public, max-age=31536000, immutable'
+            else:
+                response.headers['Cache-Control'] = 'public, max-age=3600'
         return response
 
     return app
@@ -112,6 +128,21 @@ def register_template_helpers(app):
             'now_year': datetime.now(timezone.utc).year,
         }
 
+    def static_url(filename):
+        """A /static URL carrying an mtime-derived version.
+
+        Lets css/js be cached for a year while still updating on deploy;
+        without the version they can only be cached briefly, because the
+        filenames never change.
+        """
+        try:
+            version = str(int(os.path.getmtime(
+                os.path.join(app.static_folder, filename))))[-8:]
+        except OSError:
+            return url_for('static', filename=filename)
+        return url_for('static', filename=filename, v=version)
+
+    app.jinja_env.globals['static_url'] = static_url
     app.jinja_env.globals['image_url'] = image_url
     app.jinja_env.globals['image_srcset'] = image_srcset
 

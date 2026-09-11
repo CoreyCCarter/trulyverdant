@@ -43,8 +43,31 @@
   if (m) m.setAttribute('content', dark ? '#14170f' : '#fbfaf7');
 })();
 </script>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="{{ static_url('css/style.css') }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🌿</text></svg>">
+
+{#- Sitewide entities. Declaring the publisher once, with a stable @id that
+    article markup can reference, is what lets Google associate articles with
+    a site rather than treating each as orphaned. SearchAction enables the
+    sitelinks search box. -#}
+<script type="application/ld+json">
+{{ {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {'@type': 'Organization', '@id': site_url + '/#organization',
+     'name': site_name, 'url': site_url + '/'},
+    {'@type': 'WebSite', '@id': site_url + '/#website',
+     'name': site_name, 'url': site_url + '/',
+     'description': site_description,
+     'publisher': {'@id': site_url + '/#organization'},
+     'potentialAction': {
+       '@type': 'SearchAction',
+       'target': {'@type': 'EntryPoint',
+                  'urlTemplate': site_url + '/search?q={search_term_string}'},
+       'query-input': 'required name=search_term_string'}}
+  ]
+}|tojson }}
+</script>
 
 {%- block structured_data %}{% endblock %}
 
@@ -134,6 +157,6 @@
 </div>
 {%- endif %}
 
-<script src="{{ url_for('static', filename='js/site.js') }}" defer></script>
+<script src="{{ static_url('js/site.js') }}" defer></script>
 </body>
 </html>

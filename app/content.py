@@ -5,6 +5,7 @@ the rendered HTML actually shown to readers. Rendering happens on save, so
 page views stay cheap, and the HTML is sanitised at that point rather than
 trusted at render time.
 """
+import os
 import re
 
 import markdown as md
@@ -65,7 +66,53 @@ def render_markdown(text, site_url=None):
         # nofollowed, which would waste our own link equity.
         link_rel=None,
     )
-    return _mark_external_links(clean, site_url)
+    return _improve_images(_mark_external_links(clean, site_url))
+
+
+_IMG_RE = re.compile(r'<img\s+([^>]*?)>', re.IGNORECASE)
+_ATTR_RE = re.compile(r'(\w[\w-]*)\s*=\s*"([^"]*)"')
+_UPLOAD_RE = re.compile(r'/static/uploads/([A-Za-z0-9_\-]+)-(\d+)\.webp$')
+
+
+def _image_size(src):
+    """Real pixel dimensions for one of our own uploads, or None.
+
+    Emitting width/height lets the browser reserve the right space before
+    the bytes arrive, which is what stops the article text reflowing as
+    images load (Cumulative Layout Shift). Only resolvable for local
+    uploads; an external URL's size is unknowable here.
+    """
+    m = _UPLOAD_RE.search(src or '')
+    if not m:
+        return None
+    try:
+        from flask import current_app
+        from PIL import Image
+        path = os.path.join(current_app.config['UPLOAD_FOLDER'],
+                            f'{m.group(1)}-{m.group(2)}.webp')
+        with Image.open(path) as img:
+            return img.size
+    except Exception:
+        # No app context, file missing, or unreadable: degrade to no hints.
+        return None
+
+
+def _improve_images(html):
+    """Add lazy loading, async decoding and intrinsic dimensions to body
+    images. Markdown emits a bare <img src alt>, so without this every
+    image on a page loads eagerly and the layout shifts as each lands."""
+    def repl(m):
+        attrs = dict(_ATTR_RE.findall(m.group(1)))
+        attrs.setdefault('loading', 'lazy')
+        attrs.setdefault('decoding', 'async')
+        if 'width' not in attrs and 'height' not in attrs:
+            size = _image_size(attrs.get('src', ''))
+            if size:
+                attrs['width'], attrs['height'] = str(size[0]), str(size[1])
+        rendered = ' '.join(f'{k}="{v}"' for k, v in attrs.items())
+        return f'<img {rendered}>'
+
+    return _IMG_RE.sub(repl, html)
 
 
 _H1_RE = re.compile(r'<(/?)h1\b', re.IGNORECASE)

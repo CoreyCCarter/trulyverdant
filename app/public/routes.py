@@ -1,3 +1,4 @@
+import re
 from datetime import timezone
 
 from flask import (render_template, request, abort, Response, current_app,
@@ -10,6 +11,31 @@ from app.models import (Article, Category, Tag, User, path_for,
 from app.content import split_for_ad
 from app.images import image_url
 from app.public import bp
+
+
+_IMG_SRC_RE = re.compile(r'<img[^>]+src="([^"]+)"', re.IGNORECASE)
+
+
+def _article_images(article, site):
+    """Absolute URLs for every image in an article, hero first.
+
+    Plant queries are heavily visual, so Google Images is a primary
+    discovery channel -- but it can only surface images it knows exist, and
+    nothing else in the sitemap points at them.
+    """
+    found = []
+    if article.hero_image:
+        hero = image_url(article.hero_image)
+        if hero:
+            found.append(hero)
+    found.extend(src for src in _IMG_SRC_RE.findall(article.body_html or '')
+                 if src.startswith('/static/'))
+    absolute = []
+    for url in found:
+        full = site + url if url.startswith('/') else url
+        if full not in absolute:
+            absolute.append(full)
+    return absolute
 
 
 def _page():
@@ -156,9 +182,10 @@ def sitemap():
     site = current_app.config['SITE_URL']
     urls = []
 
-    def add(loc, lastmod=None, priority='0.5', freq='weekly'):
+    def add(loc, lastmod=None, priority='0.5', freq='weekly', images=()):
         urls.append({'loc': site + loc, 'lastmod': lastmod,
-                     'priority': priority, 'changefreq': freq})
+                     'priority': priority, 'changefreq': freq,
+                     'images': images})
 
     add(path_for('public.index'), priority='1.0', freq='daily')
     add(path_for('public.about'), priority='0.3', freq='monthly')
@@ -166,7 +193,8 @@ def sitemap():
     add(path_for('public.contact'), priority='0.3', freq='yearly')
 
     for a in db.session.scalars(Article.published()).unique():
-        add(a.url, lastmod=(a.updated_at or a.published_at), priority='0.8')
+        add(a.url, lastmod=(a.updated_at or a.published_at), priority='0.8',
+            images=_article_images(a, site))
     for c in Category.query.all():
         if c.articles.filter_by(status=STATUS_PUBLISHED).count():
             add(c.url, priority='0.6')

@@ -257,8 +257,14 @@ Certbot uncomments and fills the two `ssl_certificate` lines.
 curl -I https://yourdomain.com/                    # 200
 curl -s https://yourdomain.com/robots.txt          # names your real sitemap URL
 curl -s https://yourdomain.com/sitemap.xml | head  # absolute https URLs
-curl -sI https://yourdomain.com/static/css/style.css   # 200
 curl -sI http://yourdomain.com/                    # 301 to https
+
+# Caching. Assets are proxied from the app server over the tunnel, so these
+# headers are what stop every image being re-fetched on every page view.
+curl -sI https://yourdomain.com/static/css/style.css | grep -i cache-control
+#   expect: public, max-age=3600           (unversioned)
+curl -s https://yourdomain.com/ | grep -o 'style.css?v=[0-9]*'
+#   the page should reference the versioned URL, which is cached for a year
 ```
 
 Then in a browser:

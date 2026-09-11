@@ -16,8 +16,16 @@ build step.
   sanitised on save, so stored content is safe by construction.
 - **Responsive images.** Uploads are re-encoded to WebP at several widths,
   EXIF stripped, and served via `srcset`.
-- **SEO built in:** canonical URLs, meta descriptions, Open Graph, JSON-LD
-  `Article` data, `sitemap.xml`, `robots.txt`, and an RSS feed.
+- **SEO built in:** canonical URLs, meta descriptions, Open Graph, RSS,
+  `robots.txt`, and a `sitemap.xml` that includes article images so Google
+  Images can find them. Structured data covers `Organization`, `WebSite`
+  (with a sitelinks `SearchAction`), `Article` and `BreadcrumbList`.
+- **Built for Core Web Vitals.** Uploads are content-addressed and cached
+  immutably for a year; CSS and JS carry an mtime version so they can be too
+  without going stale on deploy. Body images get `loading="lazy"` and real
+  pixel dimensions read from the file, so text does not reflow as they load.
+- **Alt text is mandatory** whenever an article has an image — it is the
+  main ranking signal for image search, not an accessibility afterthought.
 - **Ad slots that respect consent.** No Google script is emitted until a
   publisher ID is configured *and* the visitor accepts cookies.
 - **Light / dark / system theme**, chosen by the reader and remembered. The

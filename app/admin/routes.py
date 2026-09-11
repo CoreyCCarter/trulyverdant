@@ -93,6 +93,7 @@ def articles():
 def new_article():
     form = ArticleForm()
     form.category.choices = _category_choices()
+    form.has_hero = False
     if form.validate_on_submit():
         article = Article(author=current_user)
         if _apply_article_form(form, article):
@@ -113,6 +114,7 @@ def edit_article(article_id):
         abort(403)
     form = ArticleForm(obj=article)
     form.category.choices = _category_choices()
+    form.has_hero = bool(article.hero_image)
     if request.method == 'GET':
         form.category.data = article.category_id or 0
         form.tags.data = ', '.join(t.name for t in article.tags)
