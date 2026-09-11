@@ -223,8 +223,28 @@ git clone git@github.com:CoreyCCarter/trulyverdant.git /home/verdant/trulyverdan
 cd /home/verdant/trulyverdant
 ```
 
-The VPS only needs the repo for the nginx config — no venv, no `.env`, no
-database. Fill in both placeholders, then install:
+The VPS runs **none** of the application. It is a reverse proxy, a TLS
+terminator, and (optionally) the analytics host:
+
+| On the VPS | On the app server |
+| --- | --- |
+| nginx and the site vhost | the Flask app and its virtualenv |
+| certbot certificates | the app's `.env` — `SECRET_KEY`, `DATABASE_URL` |
+| Umami container + its own `.env` | PostgreSQL |
+| the repo, for these config files | uploaded images on disk |
+
+The checkout here is a convenience only: it is where
+`deploy/nginx-vps.conf` and `deploy/umami/` come from, and `git pull` keeps
+them current. Nothing on the VPS imports the application, so it needs no
+virtualenv, no database and no migrations.
+
+**Do not copy the app's `.env` to the VPS.** It holds `SECRET_KEY` and the
+database password, and the VPS is the internet-facing machine — keeping
+those only on the tunnel-side host is the point of this topology. Umami's
+`.env` under `deploy/umami/` is a separate file containing only Umami's own
+secrets, and does belong here.
+
+Fill in both placeholders, then install:
 
 ```bash
 sed -e 's/SERVER_NAME_HERE/yourdomain.com/g' \

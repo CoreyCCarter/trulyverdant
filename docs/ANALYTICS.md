@@ -105,6 +105,31 @@ Signed-out visitors only is deliberate: the script is suppressed for
 signed-in staff and across `/admin` and `/auth`. At low traffic your own
 visits would otherwise dominate the numbers you are trying to read.
 
+## Multiple sites on one instance
+
+One Umami instance handles as many sites as you want — that is what it is
+built for. There is no second server, container or database per site.
+
+Add each site under **Settings → Websites** in the dashboard. Each gets its
+own website ID and its own reports, all sharing the one container and one
+database.
+
+The only per-site work is the first-party script path. Each domain needs its
+own pair of locations, in **that domain's** `server` block, both pointing at
+the same Umami:
+
+```nginx
+# in the server block for the other domain
+location = /stats.js  { proxy_pass http://127.0.0.1:3000/script.js; }
+location = /api/send  { proxy_pass http://127.0.0.1:3000/api/send; }
+```
+
+Then set that site's own `UMAMI_WEBSITE_ID` in its own `.env`.
+
+A site hosted on a different machine entirely works the same way: its
+tracker talks to this VPS over the public internet via its own domain, so
+nothing needs to change here.
+
 ## Backups
 
 Umami's data is in the `umami-db` docker volume, separate from the site's
