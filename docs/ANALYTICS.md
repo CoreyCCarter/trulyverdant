@@ -82,9 +82,9 @@ that goes in the app's `.env`.
 
 On the **app server**, in `/home/verdant/trulyverdant/.env`:
 
-```bash
+```ini
 UMAMI_SCRIPT_URL=/stats.js
-UMAMI_WEBSITE_ID=<the id from the dashboard>
+UMAMI_WEBSITE_ID=paste-the-id-from-the-dashboard
 ```
 
 ```bash
