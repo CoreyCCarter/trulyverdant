@@ -190,7 +190,37 @@ class Article(db.Model):
 
     @property
     def is_published(self):
-        return self.status == STATUS_PUBLISHED
+        """Live to the public *now*.
+
+        Status alone is not enough: an article marked published with a
+        future date is scheduled, not live. Checking only the status made
+        such an article return 200 at its own URL while correctly staying
+        out of listings, the sitemap and the feed -- so an embargoed piece
+        was reachable by anyone with the link.
+        """
+        if self.status != STATUS_PUBLISHED:
+            return False
+        published = as_utc(self.published_at)
+        return published is not None and published <= utcnow()
+
+    @property
+    def is_scheduled(self):
+        """Marked published, but dated in the future."""
+        if self.status != STATUS_PUBLISHED:
+            return False
+        published = as_utc(self.published_at)
+        return published is not None and published > utcnow()
+
+    @property
+    def display_status(self):
+        """What an editor should see: draft, pending or published.
+
+        'published' on a future-dated article reads as live when it is not,
+        which is how a scheduled post gets mistaken for a broken one.
+        """
+        if self.status != STATUS_PUBLISHED:
+            return self.status
+        return 'pending' if self.is_scheduled else 'published'
 
     @property
     def url(self):

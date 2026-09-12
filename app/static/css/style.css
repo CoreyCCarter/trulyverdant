@@ -580,3 +580,7 @@ form.inline { display: inline; }
 @media (max-width: 480px) {
   .editor-status { flex-direction: column; gap: .15rem; }
 }
+
+/* A scheduled article is neither a draft nor live; it needs its own colour,
+   or "published" reads as live when it is not. */
+.pill-pending { background: color-mix(in srgb, var(--danger) 16%, transparent); }

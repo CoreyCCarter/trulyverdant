@@ -14,7 +14,7 @@
   {%- for a in articles %}
     <tr>
       <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a></td>
-      <td><span class="pill pill-{{ a.status }}">{{ a.status }}</span></td>
+      <td><span class="pill pill-{{ a.display_status }}">{{ a.display_status }}</span></td>
       <td>{{ a.updated_at|humandate }}</td>
     </tr>
   {%- endfor %}

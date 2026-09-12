@@ -59,8 +59,8 @@ def index():
 def article(slug):
     item = Article.query.filter_by(slug=slug).first_or_404()
 
-    # Drafts stay invisible to the public, but the author and admins can
-    # preview them at the real URL before publishing.
+    # Drafts and scheduled articles stay invisible to the public, but the
+    # author and admins can preview them at the real URL beforehand.
     if not item.is_published:
         can_preview = current_user.is_authenticated and (
             current_user.is_admin or item.author_id == current_user.id)

@@ -16,8 +16,9 @@
     <tr>
       <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a>
         {%- if a.is_published %} <a class="small muted" href="{{ a.url }}">view</a>{% endif %}</td>
-      <td><span class="pill pill-{{ a.status }}">{{ a.status }}</span></td>
-      <td>{{ a.published_at|humandate or '—' }}</td>
+      <td><span class="pill pill-{{ a.display_status }}">{{ a.display_status }}</span></td>
+      <td>{{ a.published_at|humandate or '—' }}
+        {%- if a.is_scheduled %}<br><span class="small muted">scheduled</span>{% endif %}</td>
       <td>
         <form method="post" action="{{ url_for('admin.delete_article', article_id=a.id) }}"
               onsubmit="return confirm('Delete “{{ a.title|e }}” permanently?')">
