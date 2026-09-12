@@ -38,6 +38,10 @@
         <div class="library-grid" id="library-grid"></div>
       </div>
       <div id="pane-write">{{ form.body_markdown(rows=24, id='body-source') }}</div>
+      <div class="editor-status">
+        <span id="wordcount">0 words · 1 min read</span>
+        <span id="save-state" class="save-state"></span>
+      </div>
       <div id="pane-preview" class="prose preview-pane" hidden></div>
       {%- for e in form.body_markdown.errors %}<p class="error">{{ e }}</p>{% endfor %}
     </div>
@@ -213,22 +217,56 @@ document.getElementById('btn-library').addEventListener('click', async () => {
    newer server content would be worse than losing it. */
 let dirty = false, saveTimer = null;
 
+const wordEl = document.getElementById('wordcount');
+const saveEl = document.getElementById('save-state');
+
+function updateCount() {
+  const text = body.value.trim();
+  const n = text ? text.split(/\s+/).length : 0;
+  /* 220 wpm, matching reading_time() in app/content.py so the number here
+     agrees with the one shown on the published article. */
+  const mins = Math.max(1, Math.round(n / 220));
+  wordEl.textContent = n.toLocaleString() + ' words · ' + mins + ' min read';
+}
+
+function mark(state, detail) {
+  saveEl.className = 'save-state ' + state;
+  if (state === 'saving')  saveEl.textContent = 'Saving…';
+  else if (state === 'saved')   saveEl.textContent = 'Draft saved ' + detail;
+  else if (state === 'blocked') saveEl.textContent = 'Not saving — this browser is blocking storage';
+  else saveEl.textContent = '';
+}
+
 function snapshot() {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       ts: Date.now(), title: title ? title.value : '', body: body.value
     }));
-  } catch (e) {}
+    mark('saved', new Date().toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit'
+    }));
+  } catch (e) {
+    /* Private windows throw here. Say so rather than implying a save. */
+    mark('blocked');
+  }
 }
 function clearDraft() { try { localStorage.removeItem(KEY); } catch (e) {} }
 
 [title, body].filter(Boolean).forEach(el => el.addEventListener('input', () => {
   dirty = true;
+  updateCount();
+  mark('saving');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(snapshot, 1500);
 }));
 
-form.addEventListener('submit', () => { dirty = false; clearDraft(); });
+updateCount();
+
+form.addEventListener('submit', () => {
+  dirty = false;
+  clearDraft();
+  mark('');
+});
 
 window.addEventListener('beforeunload', e => {
   if (!dirty) return;

@@ -170,3 +170,24 @@ def test_draft_bar_and_library_start_hidden(client, login, author):
         assert marker in html
         tag = html[html.index(marker) - 120:html.index(marker) + 160]
         assert 'hidden' in tag, f'{el} is not hidden on first render'
+
+
+# --- the save indicator ---------------------------------------------------
+
+def test_editor_shows_word_count_and_save_state(client, login, author):
+    """Autosave was invisible, which is indistinguishable from autosave
+    being broken -- and that is exactly how it was first reported."""
+    login('authoruser')
+    html = client.get('/admin/articles/new').get_data(as_text=True)
+    assert 'id="wordcount"' in html
+    assert 'id="save-state"' in html
+    # A blocked-storage state, so a private window is told the truth
+    # rather than shown a save that did not happen.
+    assert 'blocked' in html
+
+
+def test_status_line_is_styled(app):
+    import os
+    css = open(os.path.join(app.static_folder, 'css', 'style.css')).read()
+    for sel in ['.editor-status', '.save-state.saved', '.save-state.blocked']:
+        assert sel in css, sel

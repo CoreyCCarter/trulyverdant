@@ -563,3 +563,20 @@ form.inline { display: inline; }
   .tool-group { margin-left: 0; flex-basis: 100%; }
   .library-grid { grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); }
 }
+
+/* Editor status line: word count and save state. Autosave was previously
+   invisible, which is indistinguishable from autosave being broken. */
+.editor-status {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 1rem; margin-top: .4rem;
+  font-family: var(--mono); font-size: .74rem; color: var(--ink-soft);
+}
+#wordcount { font-variant-numeric: tabular-nums; }
+.save-state { white-space: nowrap; }
+.save-state.saving  { color: var(--ink-soft); }
+.save-state.saved   { color: var(--accent); }
+.save-state.blocked { color: var(--danger); }
+
+@media (max-width: 480px) {
+  .editor-status { flex-direction: column; gap: .15rem; }
+}
