@@ -63,6 +63,12 @@
   --shadow: 0 8px 30px rgb(0 0 0 / .45);
 }
 
+/* The browser's default rule for the hidden attribute has specificity
+   0,1,0 -- the same as a class selector -- so any later component rule
+   setting a display value silently beats it, and el.hidden stops working.
+   Force it once, here, ahead of every component rule. */
+[hidden] { display: none !important; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }

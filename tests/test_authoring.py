@@ -134,3 +134,39 @@ def test_editor_warns_against_typing_paths_by_hand(client, login, author):
     login('authoruser')
     html = client.get('/admin/articles/new').get_data(as_text=True)
     assert 'Insert image' in html
+
+
+# --- the hidden attribute must actually hide ------------------------------
+
+def test_stylesheet_forces_the_hidden_attribute(app):
+    """Regression: the UA rule [hidden]{display:none} is specificity 0,1,0,
+    the same as a class selector, so a later `.draft-bar{display:flex}`
+    silently overrode it. The draft bar was permanently visible and both
+    its buttons set el.hidden to no visible effect. No functional test can
+    see a cascade conflict, so assert the rule exists."""
+    import os
+    import re
+    css = open(os.path.join(app.static_folder, 'css', 'style.css')).read()
+    # Match the declaration itself, not the comment above it that also
+    # mentions [hidden] -- which is what this assertion first caught.
+    # Strip comments first: prose explaining the rule can contain the same
+    # pattern, and an earlier textual match would be examined instead.
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    match = re.search(r'\[hidden\]\s*\{([^}]*)\}', css)
+    assert match, 'no [hidden] rule in the stylesheet'
+    body = match.group(1)
+    assert 'display: none' in body or 'display:none' in body
+    assert '!important' in body, 'without !important a component rule wins'
+    # It must come before the component rules it has to beat.
+    assert match.start() < css.index('.draft-bar')
+
+
+def test_draft_bar_and_library_start_hidden(client, login, author):
+    """Neither should be on screen until there is something to show."""
+    login('authoruser')
+    html = client.get('/admin/articles/new').get_data(as_text=True)
+    for el in ['draft-bar', 'library', 'upload-status']:
+        marker = f'id="{el}"'
+        assert marker in html
+        tag = html[html.index(marker) - 120:html.index(marker) + 160]
+        assert 'hidden' in tag, f'{el} is not hidden on first render'
