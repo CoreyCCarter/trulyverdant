@@ -228,8 +228,11 @@ those, or clone if you prefer:
 ```bash
 # either -- copy only what is needed. Send the umami directory whole: its
 # .env.example and docker-compose.yml must end up beside each other.
-scp deploy/nginx-vps.conf you@vps:~/
-scp -r deploy/umami you@vps:~/
+# Replace USER@VPS with whatever you already type to ssh into the VPS,
+# e.g. root@203.0.113.10 or corey@vps.example.com. Run from the machine
+# that HAS the repo.
+scp deploy/nginx-vps.conf USER@VPS:~/
+scp -r deploy/umami USER@VPS:~/
 
 # or -- clone, so a later compose-file change is a git pull
 git clone git@github.com:CoreyCCarter/trulyverdant.git /home/verdant/trulyverdant

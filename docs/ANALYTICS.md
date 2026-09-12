@@ -66,7 +66,9 @@ create beside it.
 Copy the compose file across from wherever you have the repo:
 
 ```bash
-scp deploy/umami/docker-compose.yml you@vps:~/umami/docker-compose.yml
+# USER@VPS is whatever you already ssh in as, e.g. root@203.0.113.10.
+# Run this from the machine that has the repo, not from the VPS.
+scp deploy/umami/docker-compose.yml USER@VPS:~/umami/docker-compose.yml
 ```
 
 Or just create it by hand on the VPS — it is one short file, and pasting it
@@ -127,10 +129,23 @@ to come from the VPS itself and you lose all geography.
 Deliberately **not** published. Reach it over the tunnel from your own
 machine:
 
+Run this **on your own laptop or desktop** — the machine with the browser.
+Not on the VPS, and not on the app server.
+
 ```bash
-ssh -L 3000:127.0.0.1:3000 you@your-vps
-# then open http://localhost:3000
+ssh -L 3000:127.0.0.1:3000 USER@VPS
 ```
+
+`USER@VPS` is exactly what you already type to ssh into the VPS, for example
+`root@203.0.113.10` or `corey@vps.example.com`. Nothing new to set up.
+
+`-L 3000:127.0.0.1:3000` forwards port 3000 on your laptop to port 3000 on
+the VPS, through the ssh connection. Umami is bound to `127.0.0.1` there, so
+it cannot be reached from the internet at all — this tunnel is how you get a
+browser to it without publishing it.
+
+Leave that ssh session open, then visit `http://localhost:3000` in your
+browser. You are talking to the VPS, not to anything on your own machine.
 
 Default login is `admin` / `umami` — **change it immediately**.
 
