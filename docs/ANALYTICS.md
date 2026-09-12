@@ -147,10 +147,23 @@ browser to it without publishing it.
 Leave that ssh session open, then visit `http://localhost:3000` in your
 browser. You are talking to the VPS, not to anything on your own machine.
 
-Default login is `admin` / `umami` — **change it immediately**.
+Default login is `admin` / `umami` — **change it immediately** (top right,
+Profile).
 
-Add a website in the UI with your real domain. It gives you a website ID;
-that goes in the app's `.env`.
+Then add your site: **Websites → Add website**, with the domain as bare
+`yourdomain.com` — no `https://`, no trailing slash.
+
+To get its ID: **Websites → click the site → Edit** (button in the upper
+right). The UUID is shown on the edit screen. That is the value for
+`UMAMI_WEBSITE_ID`.
+
+If the UI has moved, the URL works regardless of version — opening a site's
+dashboard puts the ID in the address bar:
+
+```
+http://localhost:3000/websites/3f9a1c4e-7b2d-4a81-9e55-0c6f2a8d1b03
+                               ^ the website ID
+```
 
 ## 4. Point the app at it
 
