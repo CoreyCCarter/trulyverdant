@@ -1,8 +1,10 @@
 # Umami analytics. Runs on the PUBLIC VPS, not the app server -- that keeps
 # tracker traffic off the WireGuard tunnel entirely.
 #
-#   cd deploy/umami
-#   cp .env.example .env      # set POSTGRES_PASSWORD and APP_SECRET
+# The VPS does NOT need a checkout of this repo. Put this one file in a
+# directory there (scp it, or paste it), create a .env beside it holding
+# POSTGRES_PASSWORD and APP_SECRET, then:
+#
 #   docker compose up -d
 #
 # It binds 127.0.0.1 only. nginx proxies the two public paths it needs

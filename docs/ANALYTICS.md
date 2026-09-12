@@ -59,26 +59,46 @@ crosses the WireGuard tunnel or touches your home network.
 
 Requires Docker with the compose plugin.
 
-If `deploy/umami/` does not exist on the VPS, its checkout predates the
-analytics work and needs updating first:
+The VPS needs **no checkout of this repo**. It needs one directory holding
+two files: `docker-compose.yml` (from `deploy/umami/` here) and a `.env` you
+create beside it.
+
+Copy the compose file across from wherever you have the repo:
 
 ```bash
-cd ~/trulyverdant && git pull && ls deploy/umami
+scp deploy/umami/docker-compose.yml you@vps:~/umami/docker-compose.yml
 ```
 
-This is the one case where pulling on the VPS is necessary. Re-installing
-the nginx vhost from the repo afterwards is still a mistake — certbot has
-edited the installed copy.
+Or just create it by hand on the VPS — it is one short file, and pasting it
+avoids any transfer between machines:
 
 ```bash
-cd ~/trulyverdant/deploy/umami
-cp .env.example .env
-# Fill both values:  openssl rand -base64 36
+mkdir -p ~/umami && cd ~/umami
+nano docker-compose.yml        # paste the contents of deploy/umami/docker-compose.yml
+```
+
+Then the two secrets. `.env.example` is only a template and is not needed on
+the VPS; write the file directly:
+
+```bash
+cd ~/umami
+openssl rand -base64 36        # run twice, one value for each line below
+nano .env
+```
+
+```ini
+POSTGRES_PASSWORD=first-generated-value
+APP_SECRET=second-generated-value
+```
+
+Both are **new values you invent**. See the two-database note above: nothing
+here comes from the blog's own `.env`.
+
+```bash
 docker compose up -d
-docker compose ps          # both services healthy
+docker compose ps              # both running, db (healthy)
+curl -sI http://127.0.0.1:3000 | head -1    # expect 200
 ```
-
-It binds `127.0.0.1:3000` only — nothing is reachable from the internet yet.
 
 ## 2. Enable the two public paths
 
