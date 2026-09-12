@@ -59,6 +59,17 @@ crosses the WireGuard tunnel or touches your home network.
 
 Requires Docker with the compose plugin.
 
+If `deploy/umami/` does not exist on the VPS, its checkout predates the
+analytics work and needs updating first:
+
+```bash
+cd ~/trulyverdant && git pull && ls deploy/umami
+```
+
+This is the one case where pulling on the VPS is necessary. Re-installing
+the nginx vhost from the repo afterwards is still a mistake — certbot has
+edited the installed copy.
+
 ```bash
 cd ~/trulyverdant/deploy/umami
 cp .env.example .env

@@ -226,10 +226,12 @@ The VPS needs exactly **two files** from this repo:
 those, or clone if you prefer:
 
 ```bash
-# either -- copy only what is needed
-scp deploy/nginx-vps.conf deploy/umami/docker-compose.yml you@vps:~/
+# either -- copy only what is needed. Send the umami directory whole: its
+# .env.example and docker-compose.yml must end up beside each other.
+scp deploy/nginx-vps.conf you@vps:~/
+scp -r deploy/umami you@vps:~/
 
-# or -- clone, so a future compose-file change is a git pull
+# or -- clone, so a later compose-file change is a git pull
 git clone git@github.com:CoreyCCarter/trulyverdant.git /home/verdant/trulyverdant
 cd /home/verdant/trulyverdant
 ```
