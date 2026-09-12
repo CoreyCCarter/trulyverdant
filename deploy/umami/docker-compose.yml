@@ -19,7 +19,8 @@ services:
       DATABASE_URL: postgresql://umami:${POSTGRES_PASSWORD}@db:5432/umami
       DATABASE_TYPE: postgresql
       APP_SECRET: ${APP_SECRET}
-      # Umami sits behind nginx, so trust its forwarded headers for geo.
+      # Serves the tracker at /script.js, which nginx re-exposes on your
+      # own domain as /stats.js so ad blockers do not strip it.
       TRACKER_SCRIPT_NAME: script
     depends_on:
       db:

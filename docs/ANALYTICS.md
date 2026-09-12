@@ -10,6 +10,27 @@ browser ──▶ trulyverdant.com/stats.js   ─┐
             trulyverdant.com/api/send   ─┴─▶ nginx ──▶ umami (127.0.0.1:3000)
 ```
 
+## Two databases, no overlap
+
+This setup has two Postgres databases that never touch each other:
+
+| | The blog's database | Umami's database |
+| --- | --- | --- |
+| Where | app server, at home | a container on the VPS |
+| Holds | articles, users, invitations | page views only |
+| Created by | you, before `flask db upgrade` | docker, automatically, on first start |
+| Password lives in | the app's `.env`, inside `DATABASE_URL` | `deploy/umami/.env`, as `POSTGRES_PASSWORD` |
+| You must remember it | to connect or restore | never |
+
+So `POSTGRES_PASSWORD` in `deploy/umami/.env` is **a new password you make
+up**, not one you look up. Docker applies it to a brand-new database the
+first time it starts, and both containers read it from that one file, so
+they always match. `APP_SECRET` is likewise a fresh random value, used only
+to sign logins to the Umami dashboard.
+
+Nothing here is shared with the blog, and nothing from the blog's `.env`
+belongs in this file.
+
 ## What goes on the VPS
 
 Only two files from this repo, plus one you create:
