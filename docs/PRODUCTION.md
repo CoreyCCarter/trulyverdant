@@ -219,9 +219,26 @@ curl -I http://10.8.0.2:8000/
 
 ```bash
 sudo apt install nginx certbot python3-certbot-nginx
+```
+
+The VPS needs exactly **two files** from this repo:
+`deploy/nginx-vps.conf` and `deploy/umami/docker-compose.yml`. Copy just
+those, or clone if you prefer:
+
+```bash
+# either -- copy only what is needed
+scp deploy/nginx-vps.conf deploy/umami/docker-compose.yml you@vps:~/
+
+# or -- clone, so a future compose-file change is a git pull
 git clone git@github.com:CoreyCCarter/trulyverdant.git /home/verdant/trulyverdant
 cd /home/verdant/trulyverdant
 ```
+
+A clone here is convenience, not a requirement — nothing on the VPS reads
+the application. And once certbot has edited
+`/etc/nginx/sites-available/trulyverdant`, **do not re-render that file from
+the repo**: you would wipe the certificate lines it added. After initial
+setup, pulling only matters if the Umami compose file changes.
 
 The VPS runs **none** of the application. It is a reverse proxy, a TLS
 terminator, and (optionally) the analytics host:
