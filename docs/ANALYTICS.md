@@ -82,7 +82,7 @@ the VPS; write the file directly:
 
 ```bash
 cd ~/umami
-openssl rand -base64 36        # run twice, one value for each line below
+openssl rand -hex 32           # run twice, one value for each line below
 nano .env
 ```
 
@@ -93,6 +93,11 @@ APP_SECRET=second-generated-value
 
 Both are **new values you invent**. See the two-database note above: nothing
 here comes from the blog's own `.env`.
+
+Use `-hex`, not `-base64`. The password is interpolated into
+`postgresql://umami:PASSWORD@db:5432/umami`, and base64 includes `/` and `+`
+— a `/` terminates the URL's authority and Umami crash-loops with
+`TypeError: Invalid URL` while the database sits there perfectly healthy.
 
 ```bash
 docker compose up -d
