@@ -4,7 +4,15 @@
 {% include 'admin/_nav.html' %}
 <h1 class="page-heading">{{ 'Edit article' if article else 'New article' }}</h1>
 
-<form method="post" enctype="multipart/form-data" novalidate class="editor">
+<div id="draft-bar" class="draft-bar" hidden>
+  <span id="draft-msg"></span>
+  <span class="draft-actions">
+    <button type="button" class="btn btn-quiet" id="draft-restore">Restore</button>
+    <button type="button" class="linkish" id="draft-discard">Discard</button>
+  </span>
+</div>
+
+<form method="post" enctype="multipart/form-data" novalidate class="editor" id="editor-form">
   {{ form.hidden_tag() }}
   <div class="editor-main">
     {{ field(form.title, autofocus=not article) }}
@@ -15,8 +23,19 @@
       <div class="editor-tabs" role="tablist">
         <button type="button" class="tab active" data-pane="write" role="tab">Write</button>
         <button type="button" class="tab" data-pane="preview" role="tab">Preview</button>
-        <span class="hint inline">Markdown: <code>## heading</code>, <code>**bold**</code>,
-          <code>[link](url)</code>, <code>![alt](image-url)</code></span>
+        <span class="tool-group">
+          <button type="button" class="tool" id="btn-upload">Insert image</button>
+          <button type="button" class="tool" id="btn-library">Library</button>
+          <input type="file" id="body-file" accept="image/*" hidden>
+        </span>
+      </div>
+      <p class="hint">Markdown: <code>## heading</code>, <code>**bold**</code>,
+        <code>[link](url)</code>. Use <b>Insert image</b> rather than typing a
+        path — it uploads and writes the markdown for you.</p>
+      <div id="upload-status" class="upload-status" hidden></div>
+      <div id="library" class="library" hidden>
+        <p class="hint">Click an image to insert it at the cursor.</p>
+        <div class="library-grid" id="library-grid"></div>
       </div>
       <div id="pane-write">{{ form.body_markdown(rows=24, id='body-source') }}</div>
       <div id="pane-preview" class="prose preview-pane" hidden></div>
@@ -37,7 +56,11 @@
     </div>
     <div class="panel">
       {{ field(form.category) }}
-      {{ field(form.tags) }}
+      <div class="tag-field">
+        {{ field(form.tags) }}
+        <ul class="tag-suggest" id="tag-suggest" hidden></ul>
+      </div>
+      <script type="application/json" id="all-tags">{{ (all_tags or [])|tojson }}</script>
     </div>
     <div class="panel">
       <h2 class="panel-title">Header image</h2>
@@ -95,5 +118,198 @@ src.addEventListener('input', () => {
   clearTimeout(timer);
   if (!pane.hidden) timer = setTimeout(render, 400);
 });
+</script>
+
+<script type="module">
+/* Authoring aids: body-image upload, a reuse library, draft autosave and
+   tag autocomplete. All progressive -- the form submits normally without
+   any of it. */
+const form   = document.getElementById('editor-form');
+const body   = document.getElementById('body-source');
+const title  = document.getElementById('title');
+const csrf   = '{{ csrf_token() }}';
+const KEY    = 'tv-draft-{{ article.id if article else "new" }}';
+
+/* ---------- insert at the cursor ---------- */
+function insertAtCursor(text) {
+  const start = body.selectionStart, end = body.selectionEnd;
+  const before = body.value.slice(0, start), after = body.value.slice(end);
+  const pad = before && !before.endsWith('\n\n') ? '\n\n' : '';
+  body.value = before + pad + text + '\n\n' + after;
+  const caret = (before + pad + text).length;
+  body.setSelectionRange(caret, caret);
+  body.focus();
+  body.dispatchEvent(new Event('input'));
+}
+
+/* ---------- upload ---------- */
+const fileInput = document.getElementById('body-file');
+const status    = document.getElementById('upload-status');
+
+function say(msg, isError) {
+  status.hidden = false;
+  status.textContent = msg;
+  status.classList.toggle('error', !!isError);
+}
+
+document.getElementById('btn-upload')
+  .addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  say('Uploading ' + file.name + '…');
+  const data = new FormData();
+  data.append('file', file);
+  try {
+    const r = await fetch('{{ url_for("admin.media_upload") }}', {
+      method: 'POST', headers: {'X-CSRFToken': csrf}, body: data
+    });
+    const json = await r.json();
+    if (!r.ok) { say(json.error || 'Upload failed.', true); return; }
+    insertAtCursor(json.markdown);
+    say('Inserted. Add alt text between the brackets — it is what image '
+        + 'search reads.');
+  } catch (e) {
+    say('Upload failed.', true);
+  }
+  fileInput.value = '';
+});
+
+/* ---------- reuse library ---------- */
+const library = document.getElementById('library');
+const grid    = document.getElementById('library-grid');
+let loaded = false;
+
+document.getElementById('btn-library').addEventListener('click', async () => {
+  library.hidden = !library.hidden;
+  if (library.hidden || loaded) return;
+  grid.innerHTML = '<p class="hint">Loading…</p>';
+  try {
+    const r = await fetch('{{ url_for("admin.media") }}');
+    const {images} = await r.json();
+    if (!images.length) {
+      grid.innerHTML = '<p class="hint">Nothing uploaded yet.</p>';
+      return;
+    }
+    grid.innerHTML = '';
+    images.forEach(img => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'library-item';
+      b.innerHTML = '<img src="' + img.thumb + '" alt="" loading="lazy">';
+      b.addEventListener('click', () => insertAtCursor('![](' + img.url + ')'));
+      grid.appendChild(b);
+    });
+    loaded = true;
+  } catch (e) {
+    grid.innerHTML = '<p class="error">Could not load the library.</p>';
+  }
+});
+
+/* ---------- draft autosave ----------
+   A long article in a plain textarea is one stray Cmd-W from gone. Saved
+   locally, never auto-applied: an older local copy silently overwriting
+   newer server content would be worse than losing it. */
+let dirty = false, saveTimer = null;
+
+function snapshot() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({
+      ts: Date.now(), title: title ? title.value : '', body: body.value
+    }));
+  } catch (e) {}
+}
+function clearDraft() { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+[title, body].filter(Boolean).forEach(el => el.addEventListener('input', () => {
+  dirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(snapshot, 1500);
+}));
+
+form.addEventListener('submit', () => { dirty = false; clearDraft(); });
+
+window.addEventListener('beforeunload', e => {
+  if (!dirty) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+(function offerRestore() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  if (!saved || saved.body === body.value) return;
+  const bar = document.getElementById('draft-bar');
+  const when = new Date(saved.ts).toLocaleString();
+  document.getElementById('draft-msg').textContent =
+    'An unsaved draft from ' + when + ' differs from what is shown.';
+  bar.hidden = false;
+  document.getElementById('draft-restore').addEventListener('click', () => {
+    if (title && saved.title) title.value = saved.title;
+    body.value = saved.body;
+    bar.hidden = true;
+    dirty = true;
+    body.dispatchEvent(new Event('input'));
+  });
+  document.getElementById('draft-discard').addEventListener('click', () => {
+    clearDraft();
+    bar.hidden = true;
+  });
+})();
+
+/* ---------- tag autocomplete ----------
+   Free text turns "monstera" and "monsteras" into two thin tag pages. */
+const tagInput = document.getElementById('tags');
+const suggest  = document.getElementById('tag-suggest');
+let known = [];
+try { known = JSON.parse(document.getElementById('all-tags').textContent) || []; }
+catch (e) {}
+
+function currentToken() {
+  const parts = tagInput.value.split(',');
+  return {index: parts.length - 1, text: parts[parts.length - 1].trim()};
+}
+function hide() { suggest.hidden = true; suggest.innerHTML = ''; }
+
+function complete(name) {
+  const parts = tagInput.value.split(',');
+  parts[parts.length - 1] = ' ' + name;
+  tagInput.value = parts.join(',').replace(/^\s+/, '') + ', ';
+  hide();
+  tagInput.focus();
+}
+
+if (tagInput && known.length) {
+  tagInput.setAttribute('autocomplete', 'off');
+  tagInput.addEventListener('input', () => {
+    const {text} = currentToken();
+    const chosen = tagInput.value.split(',').map(t => t.trim().toLowerCase());
+    if (text.length < 1) return hide();
+    const matches = known.filter(
+      n => n.toLowerCase().startsWith(text.toLowerCase())
+           && !chosen.slice(0, -1).includes(n.toLowerCase())).slice(0, 8);
+    if (!matches.length) return hide();
+    suggest.innerHTML = '';
+    matches.forEach(n => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = n;
+      b.addEventListener('click', () => complete(n));
+      li.appendChild(b);
+      suggest.appendChild(li);
+    });
+    suggest.hidden = false;
+  });
+  tagInput.addEventListener('keydown', e => {
+    if (suggest.hidden) return;
+    if (e.key === 'Escape') { hide(); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const first = suggest.querySelector('button');
+      if (first) { e.preventDefault(); first.click(); }
+    }
+  });
+  tagInput.addEventListener('blur', () => setTimeout(hide, 150));
+}
 </script>
 {% endblock %}

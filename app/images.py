@@ -10,6 +10,7 @@ responsive srcset. Smaller images over the wire is the single biggest lever
 on Core Web Vitals, which in turn affects ad viewability and revenue.
 """
 import os
+import re
 import secrets
 
 from flask import current_app, url_for
@@ -119,6 +120,45 @@ def image_srcset(stored):
     return ', '.join(
         f"{url_for('static', filename=f'uploads/{stem}-{w}.webp')} {w}w"
         for w in widths)
+
+
+_VARIANT_RE = re.compile(r'^([A-Za-z0-9_\-]+)-(\d+)\.webp$')
+
+
+def list_images(limit=200):
+    """Every uploaded image, newest first.
+
+    Built by scanning the upload directory rather than from a database
+    table: uploads are already content-addressed by filename, so the
+    directory *is* the index and no migration is needed. The trade-off is
+    that there is nowhere to record alt text or which article uses an
+    image -- add a Media model if that becomes worth having.
+    """
+    directory = _upload_dir()
+    groups = {}
+    for name in os.listdir(directory):
+        match = _VARIANT_RE.match(name)
+        if not match:
+            continue
+        stem, width = match.group(1), int(match.group(2))
+        info = os.stat(os.path.join(directory, name))
+        group = groups.setdefault(stem, {'widths': [], 'mtime': 0.0, 'bytes': 0})
+        group['widths'].append(width)
+        group['mtime'] = max(group['mtime'], info.st_mtime)
+        group['bytes'] += info.st_size
+
+    images = []
+    for stem, group in sorted(groups.items(), key=lambda kv: -kv[1]['mtime']):
+        widths = sorted(group['widths'])
+        stored = f"{stem}:{','.join(str(w) for w in widths)}"
+        images.append({
+            'stored': stored,
+            'url': image_url(stored),
+            'thumb': image_url(stored, 480),
+            'widths': widths,
+            'bytes': group['bytes'],
+        })
+    return images[:limit]
 
 
 def delete_image(stored):

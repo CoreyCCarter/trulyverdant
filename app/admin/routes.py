@@ -8,7 +8,8 @@ from app.extensions import db
 from app.models import (Article, Category, Tag, User, Invite, unique_slug,
                         utcnow, STATUS_PUBLISHED, STATUS_DRAFT, ROLE_ADMIN)
 from app.content import render_markdown, summarise, reading_time
-from app.images import save_image, delete_image, ImageError
+from app.images import (save_image, delete_image, image_url,
+                        list_images, ImageError)
 from app.admin import bp
 from app.admin.forms import ArticleForm, CategoryForm, InviteForm, ConfirmForm
 
@@ -32,6 +33,10 @@ def _category_choices():
     choices += [(c.id, c.name) for c in
                 Category.query.order_by(Category.name).all()]
     return choices
+
+
+def _tag_names():
+    return [t.name for t in Tag.query.order_by(Tag.name).all()]
 
 
 def _sync_tags(article, raw):
@@ -103,7 +108,7 @@ def new_article():
             return redirect(url_for('admin.edit_article', article_id=article.id))
         db.session.rollback()
     return render_template('admin/article_form.html', form=form, article=None,
-                           page_title='New article')
+                           all_tags=_tag_names(), page_title='New article')
 
 
 @bp.route('/articles/<int:article_id>', methods=['GET', 'POST'])
@@ -124,7 +129,8 @@ def edit_article(article_id):
             flash('Article saved.', 'success')
             return redirect(url_for('admin.edit_article', article_id=article.id))
     return render_template('admin/article_form.html', form=form,
-                           article=article, page_title=f'Edit: {article.title}')
+                           article=article, all_tags=_tag_names(),
+                           page_title=f'Edit: {article.title}')
 
 
 def _apply_article_form(form, article):
@@ -187,6 +193,30 @@ def delete_article(article_id):
     db.session.commit()
     flash('Article deleted.', 'success')
     return redirect(url_for('admin.articles'))
+
+
+@bp.route('/media', methods=['GET'])
+@login_required
+def media():
+    """Images already uploaded, for reuse from the editor."""
+    return {'images': list_images()}
+
+
+@bp.route('/media/upload', methods=['POST'])
+@login_required
+def media_upload():
+    """Upload one image from the editor and return markdown for it.
+
+    Body images previously had no upload path at all -- save_image() was
+    reachable only through the hero field -- so illustrating mid-article
+    was impossible without hand-writing a URL.
+    """
+    try:
+        stored = save_image(request.files.get('file'))
+    except ImageError as exc:
+        return {'error': str(exc)}, 400
+    url = image_url(stored)
+    return {'stored': stored, 'url': url, 'markdown': f'![]({url})'}
 
 
 @bp.route('/preview', methods=['POST'])

@@ -487,3 +487,73 @@ form.inline { display: inline; }
   .layout, .two-col, .editor { display: block; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; }
 }
+
+/* --------------------------------------------------------------------------
+   Authoring aids: body-image upload, reuse library, draft recovery and
+   tag autocomplete.
+   -------------------------------------------------------------------------- */
+
+.tool-group { margin-left: auto; display: flex; gap: .4rem; }
+.tool {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: .2rem .8rem; font: inherit;
+  font-size: .82rem; color: var(--ink); cursor: pointer;
+}
+.tool:hover { border-color: var(--accent); color: var(--accent); }
+
+.upload-status {
+  margin: .5rem 0 0; padding: .5rem .7rem; border-radius: 6px;
+  background: var(--accent-soft); color: var(--ink); font-size: .85rem;
+}
+.upload-status.error {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.library {
+  margin-top: .6rem; padding: .8rem; border: 1px dashed var(--line);
+  border-radius: var(--radius); background: var(--surface);
+}
+.library-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: .5rem; margin-top: .5rem; max-height: 18rem; overflow-y: auto;
+}
+.library-item {
+  padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: none; cursor: pointer; overflow: hidden; aspect-ratio: 4/3;
+}
+.library-item:hover { border-color: var(--accent); }
+.library-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Draft recovery. Deliberately loud: it means work is at stake. */
+.draft-bar {
+  display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center;
+  justify-content: space-between; margin-bottom: 1.2rem;
+  padding: .7rem 1rem; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-left: 3px solid var(--danger); font-size: .92rem;
+}
+.draft-actions { display: flex; gap: .8rem; align-items: center; }
+
+.tag-field { position: relative; }
+.tag-suggest {
+  list-style: none; margin: 0; padding: .25rem;
+  position: absolute; left: 0; right: 0; z-index: 30;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / .12);
+  max-height: 12rem; overflow-y: auto;
+}
+.tag-suggest li { margin: 0; }
+.tag-suggest button {
+  display: block; width: 100%; text-align: left; background: none;
+  border: 0; padding: .35rem .6rem; font: inherit; font-size: .9rem;
+  color: var(--ink); cursor: pointer; border-radius: 5px;
+}
+.tag-suggest button:hover, .tag-suggest button:focus {
+  background: var(--accent-soft); color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .tool-group { margin-left: 0; flex-basis: 100%; }
+  .library-grid { grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); }
+}
