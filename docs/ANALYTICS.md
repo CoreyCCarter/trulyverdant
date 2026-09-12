@@ -10,6 +10,19 @@ browser ──▶ trulyverdant.com/stats.js   ─┐
             trulyverdant.com/api/send   ─┴─▶ nginx ──▶ umami (127.0.0.1:3000)
 ```
 
+## What goes on the VPS
+
+Only two files from this repo, plus one you create:
+
+| File | Purpose |
+| --- | --- |
+| `deploy/nginx-vps.conf` | installed to `/etc/nginx/sites-available/trulyverdant` |
+| `deploy/umami/docker-compose.yml` | run in place with `docker compose` |
+| `deploy/umami/.env` | you create it from `.env.example`; two secrets |
+
+No virtualenv, no Python, no migrations, and **not** the app's own `.env`.
+`deploy.sh` is never run here — that is the app server's job.
+
 Umami runs on the **same single VPS** you already have — the one holding the
 WireGuard endpoint and terminating TLS to make the site reachable. It is not
 a second server: it is one more container on that box, bound to
@@ -35,39 +48,22 @@ docker compose ps          # both services healthy
 
 It binds `127.0.0.1:3000` only — nothing is reachable from the internet yet.
 
-## 2. Proxy the two public paths
+## 2. Enable the two public paths
 
-Umami needs exactly two paths served from your domain. Add these to the
-`server` block in `/etc/nginx/sites-available/trulyverdant`, **above** the
-`location /` block — nginx matches exact-match `location =` first regardless
-of order, but keeping them together reads better:
-
-```nginx
-# Umami tracker, first-party so blockers do not strip it.
-location = /stats.js {
-    proxy_pass http://127.0.0.1:3000/script.js;
-    proxy_set_header Host $host;
-    proxy_hide_header Cache-Control;
-    add_header Cache-Control "public, max-age=3600";
-}
-
-# Where the tracker posts its events.
-location = /api/send {
-    proxy_pass http://127.0.0.1:3000/api/send;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-
-`X-Forwarded-For` matters: without it every visitor appears to come from
-the VPS itself and you lose all geography.
+The locations are already in `deploy/nginx-vps.conf`, commented out. Umami
+needs exactly two paths served from your domain — uncomment both blocks in
+the installed config:
 
 ```bash
+sudoedit /etc/nginx/sites-available/trulyverdant
+#   find "--- Umami analytics (optional) ---" and uncomment
+#   the two location blocks beneath it
 sudo nginx -t && sudo systemctl reload nginx
 curl -sI https://yourdomain.com/stats.js | head -1      # expect 200
 ```
+
+`X-Forwarded-For` is in there deliberately: without it every visitor appears
+to come from the VPS itself and you lose all geography.
 
 ## 3. Reach the dashboard
 
