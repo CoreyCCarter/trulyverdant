@@ -189,6 +189,36 @@ def register(app):
         click.echo('Send this link (valid 14 days):')
         click.echo(f"  {current_app.config['SITE_URL']}/auth/invite/{inv.token}")
 
+    @app.cli.command('import-articles')
+    @click.argument('directory', type=click.Path(exists=True, file_okay=False))
+    @click.option('--author', 'username', required=True,
+                  help='Username that will own the imported articles.')
+    @click.option('--update', is_flag=True,
+                  help='Replace articles whose slug already exists.')
+    @click.option('--dry-run', is_flag=True,
+                  help='Validate and report without writing anything.')
+    def import_articles(directory, username, update, dry_run):
+        """Import a directory of Markdown files as articles."""
+        from app.importer import import_directory
+        author = User.query.filter_by(username=username.strip().lower()).first()
+        if author is None:
+            raise click.ClickException(f'No user named {username!r}.')
+        results = import_directory(directory, author, update=update,
+                                   dry_run=dry_run)
+        colour = {'error': 'red', 'skipped': 'yellow'}
+        for r in results:
+            line = (f'{r.action:13} {r.state:10} imgs={r.images} '
+                    f'{r.slug or r.file}')
+            if r.message:
+                line += f'  -- {r.message}'
+            click.echo(click.style(line, fg=colour.get(r.action)))
+        counts = {}
+        for r in results:
+            counts[r.action] = counts.get(r.action, 0) + 1
+        click.echo('\n' + ', '.join(f'{v} {k}' for k, v in sorted(counts.items())))
+        if counts.get('error'):
+            raise click.ClickException('Some files were not imported.')
+
     @app.cli.command('seed-demo')
     def seed_demo():
         """Populate categories and a few sample articles for local preview."""
