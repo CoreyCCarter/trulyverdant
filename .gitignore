@@ -36,3 +36,7 @@ app/static/uploads/*
 
 .vscode/
 .idea/
+
+# Markdown and images waiting to be imported as articles. Content lives in
+# the database once imported, so none of this belongs in git.
+import/
