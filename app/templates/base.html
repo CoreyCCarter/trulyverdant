@@ -88,6 +88,16 @@
     <nav id="nav" class="site-nav">
       <a href="{{ url_for('public.index') }}">Home</a>
       <a href="{{ url_for('public.about') }}">About</a>
+      {#- Staff links appear only once signed in, so nothing here advertises
+          the login page to readers. -#}
+      {%- if current_user.is_authenticated %}
+      {%- if current_user.is_admin %}
+      <a class="nav-staff" href="{{ url_for('admin.dashboard') }}">Admin</a>
+      {%- else %}
+      <a class="nav-staff" href="{{ url_for('admin.articles') }}">My articles</a>
+      {%- endif %}
+      <a class="nav-staff" href="{{ url_for('admin.new_article') }}">Write</a>
+      {%- endif %}
       <form class="nav-search" action="{{ url_for('public.search') }}" method="get" role="search">
         <label class="visually-hidden" for="q">Search</label>
         <input id="q" type="search" name="q" placeholder="Search…" value="{{ q or '' }}">

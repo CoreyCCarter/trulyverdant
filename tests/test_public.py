@@ -105,6 +105,38 @@ def test_signed_in_staff_still_get_an_admin_link(client, login, author,
     assert '/admin/' in client.get('/').get_data(as_text=True)
 
 
+def _header_nav(client, path='/'):
+    import re
+    html = client.get(path).get_data(as_text=True)
+    return re.search(r'<nav id="nav".*?</nav>', html, re.S).group(0)
+
+
+def test_header_nav_has_no_staff_links_for_readers(client, author,
+                                                   make_article):
+    make_article(author, title='Anything')
+    nav = _header_nav(client)
+    assert '/admin' not in nav
+    assert '/auth/' not in nav
+
+
+def test_admin_header_nav_links_to_admin(client, login, admin, make_article):
+    make_article(admin, title='Anything')
+    login('adminuser')
+    nav = _header_nav(client)
+    assert 'href="/admin/"' in nav and '>Admin<' in nav
+    assert 'href="/admin/articles/new"' in nav
+
+
+def test_author_header_nav_links_to_authoring(client, login, author,
+                                              make_article):
+    make_article(author, title='Anything')
+    login('authoruser')
+    nav = _header_nav(client)
+    assert 'href="/admin/articles"' in nav
+    assert 'href="/admin/articles/new"' in nav
+    assert '>Admin<' not in nav, 'authors cannot use the admin-only pages'
+
+
 def test_robots_disallows_auth(client):
     assert 'Disallow: /auth/' in client.get('/robots.txt').get_data(as_text=True)
 
