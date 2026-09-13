@@ -156,6 +156,33 @@ def test_summary_is_italic_everywhere_it_appears(client, author, make_article,
     assert rule and 'font-style: italic' in rule.group(1)
 
 
+def test_cards_lead_with_pet_safety_tag(client, author, make_article):
+    """Pet safety is the tag readers act on: it comes first on the card and
+    carries a class so it can be coloured."""
+    import re
+    from app.extensions import db
+    from app.models import Tag
+    a = make_article(author, title='Tagged Piece')
+    a.tags = [Tag(name='aroid', slug='aroid'), Tag(name='fern', slug='fern'),
+              Tag(name='trailing', slug='trailing'),
+              Tag(name='toxic-to-pets', slug='toxic-to-pets')]
+    db.session.commit()
+    html = client.get('/').get_data(as_text=True)
+    tags = html[html.index('class="card-tags"'):]
+    tags = tags[:tags.index('</ul>')]
+    classes = re.findall(r'class="tag (tag-[\w-]+)"', tags)
+    assert classes[0] == 'tag-toxic-to-pets', 'pet safety must come first'
+    assert len(classes) == 3, 'cards show at most three tags'
+
+
+def test_fonts_are_self_hosted(client):
+    """No Google Fonts request: nothing reaches a third party before consent."""
+    html = client.get('/').get_data(as_text=True)
+    assert 'fonts.googleapis.com' not in html
+    for f in ['young-serif-400.woff2', 'figtree-variable.woff2']:
+        assert client.get(f'/static/fonts/{f}').status_code == 200
+
+
 def test_lede_itself_is_not_italic(app):
     """.lede is shared with the tagline, category intros, author bios and
     error messages. Only summaries should italicise."""
