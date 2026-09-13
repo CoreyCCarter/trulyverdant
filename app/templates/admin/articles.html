@@ -19,8 +19,8 @@
         {%- if a.is_published %} <a class="small muted" href="{{ a.url }}">view</a>{% endif %}</td>
       <td><span class="pill pill-{{ a.display_status }}">{{ a.display_status }}</span></td>
       <td>
-        {%- if a.is_scheduled %}{{ a.published_at|humandatetime }}<br><span class="small muted">scheduled</span>
-        {%- else %}{{ a.published_at|humandate or '—' }}{% endif %}</td>
+        {{- a.published_at|humandatetime or '—' }}
+        {%- if a.is_scheduled %}<br><span class="small muted">scheduled</span>{% endif %}</td>
       <td>
         <form method="post" action="{{ url_for('admin.delete_article', article_id=a.id) }}"
               onsubmit="return confirm('Delete “{{ a.title|e }}” permanently?')">

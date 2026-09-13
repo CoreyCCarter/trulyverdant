@@ -171,6 +171,15 @@ def test_article_list_shows_scheduled_time(client, login, admin, author):
     assert a.published_at.strftime('%H:%M UTC') in html
 
 
+def test_published_articles_show_time_published(client, login, admin, author,
+                                                make_article):
+    a = make_article(author, title='Actually Live')
+    stamp = a.published_at.strftime('%d %B %Y, %H:%M UTC')
+    login('adminuser')
+    assert stamp in client.get('/admin/articles').get_data(as_text=True)
+    assert stamp in client.get('/admin/').get_data(as_text=True)
+
+
 def test_pending_pill_is_styled(app):
     import os
     css = open(os.path.join(app.static_folder, 'css', 'style.css')).read()

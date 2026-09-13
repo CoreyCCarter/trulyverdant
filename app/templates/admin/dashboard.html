@@ -33,7 +33,7 @@
     <tr>
       <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a></td>
       <td><span class="pill pill-{{ a.display_status }}">{{ a.display_status }}</span>
-        {%- if a.is_scheduled %}<br><span class="small muted">{{ a.published_at|humandatetime }}</span>{% endif %}</td>
+        {%- if a.display_status != 'draft' and a.published_at %}<br><span class="small muted">{{ a.published_at|humandatetime }}</span>{% endif %}</td>
       <td>{{ a.updated_at|humandate }}</td>
     </tr>
   {%- endfor %}
