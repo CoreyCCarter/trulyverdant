@@ -168,6 +168,14 @@ def register_template_helpers(app):
     def humandate(value):
         return value.strftime('%d %B %Y') if value else ''
 
+    @app.template_filter('humandatetime')
+    def humandatetime(value):
+        """Date and time, labelled UTC: that is how publish times are stored
+        and how the editor's date field is interpreted."""
+        from app.models import as_utc
+        value = as_utc(value)
+        return value.strftime('%d %B %Y, %H:%M UTC') if value else ''
+
     @app.template_filter('isodate')
     def isodate(value):
         from app.models import as_utc

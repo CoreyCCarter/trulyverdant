@@ -3,9 +3,27 @@
 {% include 'admin/_nav.html' %}
 <h1 class="page-heading">Dashboard</h1>
 <div class="stats">
-  <div class="stat"><span class="stat-num">{{ counts.published }}</span> published</div>
-  <div class="stat"><span class="stat-num">{{ counts.draft }}</span> drafts</div>
+  <a class="stat" href="{{ url_for('admin.articles', status='published') }}"><span class="stat-num">{{ counts.published }}</span> published</a>
+  <a class="stat" href="{{ url_for('admin.articles', status='pending') }}"><span class="stat-num">{{ counts.pending }}</span> pending</a>
+  <a class="stat" href="{{ url_for('admin.articles', status='draft') }}"><span class="stat-num">{{ counts.draft }}</span> drafts</a>
 </div>
+{%- if scheduled %}
+<h2>Scheduled</h2>
+<div class="table-scroll"><table class="table">
+  <thead><tr><th>Title</th><th>Goes live</th></tr></thead>
+  <tbody>
+  {%- for a in scheduled %}
+    <tr>
+      <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a></td>
+      <td>{{ a.published_at|humandatetime }}</td>
+    </tr>
+  {%- endfor %}
+  </tbody>
+</table></div>
+{%- if counts.pending > scheduled|length %}
+<p class="small"><a href="{{ url_for('admin.articles', status='pending') }}">All {{ counts.pending }} pending articles</a></p>
+{%- endif %}
+{%- endif %}
 <h2>Recently updated</h2>
 {%- if articles %}
 <div class="table-scroll"><table class="table">
@@ -14,7 +32,8 @@
   {%- for a in articles %}
     <tr>
       <td><a href="{{ url_for('admin.edit_article', article_id=a.id) }}">{{ a.title }}</a></td>
-      <td><span class="pill pill-{{ a.display_status }}">{{ a.display_status }}</span></td>
+      <td><span class="pill pill-{{ a.display_status }}">{{ a.display_status }}</span>
+        {%- if a.is_scheduled %}<br><span class="small muted">{{ a.published_at|humandatetime }}</span>{% endif %}</td>
       <td>{{ a.updated_at|humandate }}</td>
     </tr>
   {%- endfor %}

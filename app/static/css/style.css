@@ -381,6 +381,8 @@ form.inline { display: inline; }
 .stat { background: var(--surface); border: 1px solid var(--line);
         border-radius: var(--radius); padding: 1rem 1.4rem; font-size: .85rem;
         color: var(--ink-soft); }
+a.stat { text-decoration: none; }
+a.stat:hover { border-color: var(--accent); }
 .stat-num { display: block; font-size: 1.8rem; font-weight: 700; color: var(--ink); }
 
 .two-col { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 2rem; align-items: start; }

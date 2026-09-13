@@ -54,38 +54,64 @@ def _sync_tags(article, raw):
     article.tags = tags
 
 
+STATUS_PENDING = 'pending'
+
+
+def _state_filter(status, now):
+    """SQL for the three states an editor sees, matching display_status.
+
+    The status column alone only knows draft/published; a published article
+    dated in the future is pending, and counting it as published made the
+    dashboard claim articles were live that were not."""
+    if status == STATUS_DRAFT:
+        return Article.status == STATUS_DRAFT
+    if status == STATUS_PENDING:
+        return db.and_(Article.status == STATUS_PUBLISHED,
+                       Article.published_at > now)
+    # Spelled out rather than NOT(pending): NOT(NULL > now) is NULL in SQL,
+    # which would drop an undated article that display_status calls published.
+    return db.and_(Article.status == STATUS_PUBLISHED,
+                   db.or_(Article.published_at.is_(None),
+                          Article.published_at <= now))
+
+
+def _own(stmt):
+    if not current_user.is_admin:
+        stmt = stmt.where(Article.author_id == current_user.id)
+    return stmt
+
+
 @bp.route('/')
 @login_required
 def dashboard():
-    mine = db.select(Article)
-    if not current_user.is_admin:
-        mine = mine.where(Article.author_id == current_user.id)
-    articles = db.session.scalars(
-        mine.order_by(Article.updated_at.desc()).limit(10)).unique().all()
-
-    def _count(status):
-        stmt = db.select(db.func.count(Article.id)).where(
-            Article.status == status)
-        if not current_user.is_admin:
-            stmt = stmt.where(Article.author_id == current_user.id)
-        return db.session.scalar(stmt)
-
-    counts = {'published': _count(STATUS_PUBLISHED),
-              'draft': _count(STATUS_DRAFT)}
+    now = utcnow()
+    articles = db.session.scalars(_own(db.select(Article))
+                                  .order_by(Article.updated_at.desc())
+                                  .limit(10)).unique().all()
+    scheduled = db.session.scalars(
+        _own(db.select(Article)).where(_state_filter(STATUS_PENDING, now))
+        .order_by(Article.published_at.asc()).limit(10)).unique().all()
+    counts = {state: db.session.scalar(
+                  _own(db.select(db.func.count(Article.id)))
+                  .where(_state_filter(state, now)))
+              for state in (STATUS_PUBLISHED, STATUS_PENDING, STATUS_DRAFT)}
     return render_template('admin/dashboard.html', articles=articles,
-                           counts=counts, page_title='Dashboard')
+                           scheduled=scheduled, counts=counts,
+                           page_title='Dashboard')
 
 
 @bp.route('/articles')
 @login_required
 def articles():
-    query = db.select(Article)
-    if not current_user.is_admin:
-        query = query.where(Article.author_id == current_user.id)
+    query = _own(db.select(Article))
     status = request.args.get('status')
-    if status in (STATUS_DRAFT, STATUS_PUBLISHED):
-        query = query.where(Article.status == status)
-    items = db.paginate(query.order_by(Article.updated_at.desc()),
+    if status in (STATUS_DRAFT, STATUS_PENDING, STATUS_PUBLISHED):
+        query = query.where(_state_filter(status, utcnow()))
+    # Pending lists soonest first: the question on that tab is "what goes
+    # out next".
+    order = (Article.published_at.asc() if status == STATUS_PENDING
+             else Article.updated_at.desc())
+    items = db.paginate(query.order_by(order),
                         page=request.args.get('page', 1, type=int),
                         per_page=20, error_out=False)
     return render_template('admin/articles.html', articles=items,

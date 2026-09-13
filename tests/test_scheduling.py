@@ -119,6 +119,58 @@ def test_live_article_still_reads_as_published(client, login, admin, author,
     assert 'pill-published' in html
 
 
+def _stat(html, label):
+    import re
+    m = re.search(r'stat-num">(\d+)</span> ' + label, html)
+    assert m, f'no {label} stat on the dashboard'
+    return int(m.group(1))
+
+
+def test_dashboard_counts_pending_separately(client, login, admin, author,
+                                             make_article):
+    """Regression: every status=published article counted as published,
+    so a batch of scheduled imports read as live."""
+    make_article(author, title='Live One')
+    _article(author)
+    _article(author, title='Later Piece', slug='later-piece',
+             published_at=utcnow() + timedelta(days=30))
+    _article(author, status=STATUS_DRAFT, title='Draft', slug='draft')
+    login('adminuser')
+    html = client.get('/admin/').get_data(as_text=True)
+    assert _stat(html, 'published') == 1
+    assert _stat(html, 'pending') == 2
+    assert _stat(html, 'drafts') == 1
+
+
+def test_dashboard_shows_when_pending_articles_go_live(client, login, admin,
+                                                       author):
+    a = _article(author)
+    login('adminuser')
+    html = client.get('/admin/').get_data(as_text=True)
+    assert 'Scheduled' in html
+    assert a.published_at.strftime('%d %B %Y, %H:%M UTC') in html
+
+
+def test_pending_filter_lists_only_scheduled(client, login, admin, author,
+                                             make_article):
+    make_article(author, title='Actually Live')
+    _article(author)
+    login('adminuser')
+    html = client.get('/admin/articles?status=pending').get_data(as_text=True)
+    assert 'Scheduled Piece' in html
+    assert 'Actually Live' not in html
+    live = client.get('/admin/articles?status=published').get_data(as_text=True)
+    assert 'Actually Live' in live
+    assert 'Scheduled Piece' not in live
+
+
+def test_article_list_shows_scheduled_time(client, login, admin, author):
+    a = _article(author)
+    login('adminuser')
+    html = client.get('/admin/articles').get_data(as_text=True)
+    assert a.published_at.strftime('%H:%M UTC') in html
+
+
 def test_pending_pill_is_styled(app):
     import os
     css = open(os.path.join(app.static_folder, 'css', 'style.css')).read()
