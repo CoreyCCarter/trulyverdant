@@ -34,7 +34,7 @@ class Config:
     # --- Site identity (used in titles, feeds, structured data) -------------
     SITE_NAME = os.environ.get('SITE_NAME', 'TrulyVerdant')
     SITE_TAGLINE = os.environ.get(
-        'SITE_TAGLINE', 'Field notes and growing guides for plant people')
+        'SITE_TAGLINE', 'For those who truly live life in the green')
     SITE_DESCRIPTION = os.environ.get(
         'SITE_DESCRIPTION',
         'In-depth articles on houseplants, gardening and plant care, '

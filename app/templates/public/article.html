@@ -98,9 +98,23 @@
   {%- if related %}
   <section class="related">
     <h2>More in {{ article.category.name }}</h2>
-    <ul class="plain">
+    <ul class="related-grid">
       {%- for r in related %}
-      <li><a href="{{ r.url }}">{{ r.title }}</a></li>
+      <li>
+        <a class="related-item" href="{{ r.url }}">
+          {%- if r.hero_image %}
+          {#- Empty alt: the title is inside the same link, so describing the
+              photo would only repeat it to screen readers. #}
+          <img src="{{ image_url(r.hero_image, 480) }}"
+               {% if image_srcset(r.hero_image) %}srcset="{{ image_srcset(r.hero_image) }}"
+               sizes="(max-width: 620px) 50vw, 240px"{% endif %}
+               alt="" loading="lazy" decoding="async" width="480" height="300">
+          {%- else %}
+          <span class="related-noimg" aria-hidden="true"></span>
+          {%- endif %}
+          <span class="related-title">{{ r.title }}</span>
+        </a>
+      </li>
       {%- endfor %}
     </ul>
   </section>

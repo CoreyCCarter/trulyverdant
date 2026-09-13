@@ -51,8 +51,9 @@ def _paginate(query):
 @bp.route('/')
 def index():
     articles = _paginate(Article.published())
+    recent = db.session.scalars(Article.published().limit(5)).unique().all()
     return render_template('public/index.html', articles=articles,
-                           page_title=None)
+                           recent=recent, page_title=None)
 
 
 @bp.route('/article/<slug>')

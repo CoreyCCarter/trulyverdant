@@ -96,7 +96,6 @@ def create_app(config_class=Config):
 
 def register_template_helpers(app):
     from app.images import image_url, image_srcset
-    from app.models import Category
 
     @app.context_processor
     def inject_globals():
@@ -136,7 +135,6 @@ def register_template_helpers(app):
             'analytics_enabled': analytics_enabled,
             'umami_script_url': cfg['UMAMI_SCRIPT_URL'],
             'umami_website_id': cfg['UMAMI_WEBSITE_ID'],
-            'nav_categories': Category.query.order_by(Category.name).all(),
             'now_year': datetime.now(timezone.utc).year,
         }
 

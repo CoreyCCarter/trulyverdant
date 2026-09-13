@@ -175,6 +175,42 @@ def test_cards_lead_with_pet_safety_tag(client, author, make_article):
     assert len(classes) == 3, 'cards show at most three tags'
 
 
+def test_sidebar_lists_recent_posts_not_topics(client, author, make_article):
+    from datetime import timedelta
+    from app.extensions import db
+    from app.models import utcnow
+    for n in range(6):
+        a = make_article(author, title=f'Post Number {n}')
+        a.published_at = utcnow() - timedelta(days=6 - n)
+    make_article(author, title='Hidden Draft', status=STATUS_DRAFT)
+    db.session.commit()
+    html = client.get('/').get_data(as_text=True)
+    assert 'Topics' not in html
+    widget = html[html.index('Recent Posts'):]
+    widget = widget[:widget.index('</section>')]
+    assert widget.count('<li>') == 5
+    assert widget.index('Post Number 5') < widget.index('Post Number 1'), 'newest first'
+    assert 'Post Number 0' not in widget
+    assert 'Hidden Draft' not in widget
+
+
+def test_more_in_section_shows_hero_pictures(client, author, make_article,
+                                             category):
+    from app.extensions import db
+    current = make_article(author, title='Reading Now', category=category)
+    pictured = make_article(author, title='Has A Photo', category=category)
+    pictured.hero_image = 'relatedhero123'
+    pictured.hero_alt = 'A plant'
+    make_article(author, title='No Photo', category=category)
+    db.session.commit()
+    html = client.get(current.url).get_data(as_text=True)
+    section = html[html.index('class="related"'):]
+    section = section[:section.index('</section>')]
+    assert 'Has A Photo' in section and 'No Photo' in section
+    assert section.count('<img') == 1, 'only the article with a photo gets one'
+    assert 'related-noimg' in section, 'articles without a photo keep the grid aligned'
+
+
 def test_fonts_are_self_hosted(client):
     """No Google Fonts request: nothing reaches a third party before consent."""
     html = client.get('/').get_data(as_text=True)

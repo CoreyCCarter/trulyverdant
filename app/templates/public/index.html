@@ -27,12 +27,15 @@
   </div>
   <aside class="sidebar">
     {{ ad_unit(slot_sidebar, 'ad-sidebar') }}
-    {%- if nav_categories %}
+    {%- if recent %}
     <section class="widget">
-      <h2>Topics</h2>
-      <ul class="plain">
-        {%- for c in nav_categories %}
-        <li><a href="{{ c.url }}">{{ c.name }}</a></li>
+      <h2>Recent Posts</h2>
+      <ul class="plain recent-posts">
+        {%- for a in recent %}
+        <li>
+          <a href="{{ a.url }}">{{ a.title }}</a>
+          <time class="small muted" datetime="{{ a.published_at|isodate }}">{{ a.published_at|humandate }}</time>
+        </li>
         {%- endfor %}
       </ul>
     </section>
