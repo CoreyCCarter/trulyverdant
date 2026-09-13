@@ -8,6 +8,21 @@ def test_homepage_is_public(client, author, make_article):
     assert b'Public Piece' in r.data
 
 
+def test_categories_are_not_in_the_header_nav(client, author, make_article):
+    import re
+    from app.extensions import db
+    from app.models import Category
+    cat = Category(name='Succulents', slug='succulents')
+    db.session.add(cat)
+    db.session.commit()
+    make_article(author, title='Filed Piece', category=cat)
+    html = client.get('/').get_data(as_text=True)
+    nav = re.search(r'<nav id="nav".*?</nav>', html, re.S).group(0)
+    assert cat.url not in nav
+    assert 'Succulents' not in nav
+    assert cat.url in html, 'category pages must stay reachable elsewhere'
+
+
 def test_article_page_renders(client, author, make_article):
     a = make_article(author, title='Monstera Care')
     r = client.get(a.url)

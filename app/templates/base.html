@@ -87,9 +87,6 @@
     </a>
     <nav id="nav" class="site-nav">
       <a href="{{ url_for('public.index') }}">Home</a>
-      {%- for c in nav_categories[:4] %}
-      <a href="{{ c.url }}">{{ c.name }}</a>
-      {%- endfor %}
       <a href="{{ url_for('public.about') }}">About</a>
       <form class="nav-search" action="{{ url_for('public.search') }}" method="get" role="search">
         <label class="visually-hidden" for="q">Search</label>
