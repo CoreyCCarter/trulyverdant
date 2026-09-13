@@ -92,3 +92,28 @@ def test_signed_in_staff_still_get_an_admin_link(client, login, author,
 
 def test_robots_disallows_auth(client):
     assert 'Disallow: /auth/' in client.get('/robots.txt').get_data(as_text=True)
+
+
+# --- summary styling ------------------------------------------------------
+
+def test_summary_is_italic_everywhere_it_appears(client, author, make_article,
+                                                 app):
+    import os, re
+    a = make_article(author, title='Italic Summary', body='Some prose here.')
+    assert 'article-summary' in client.get(a.url).get_data(as_text=True)
+    assert 'card-summary' in client.get('/').get_data(as_text=True)
+
+    css = open(os.path.join(app.static_folder, 'css', 'style.css')).read()
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    rule = re.search(r'\.article-summary,\s*\.card-summary\s*\{([^}]*)\}', css)
+    assert rule and 'font-style: italic' in rule.group(1)
+
+
+def test_lede_itself_is_not_italic(app):
+    """.lede is shared with the tagline, category intros, author bios and
+    error messages. Only summaries should italicise."""
+    import os, re
+    css = open(os.path.join(app.static_folder, 'css', 'style.css')).read()
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    lede = re.search(r'(?m)^\.lede\s*\{([^}]*)\}', css)
+    assert lede and 'italic' not in lede.group(1)

@@ -53,7 +53,7 @@
 
   <header class="article-head">
     <h1>{{ article.title }}</h1>
-    {%- if article.summary %}<p class="lede">{{ article.summary }}</p>{% endif %}
+    {%- if article.summary %}<p class="lede article-summary">{{ article.summary }}</p>{% endif %}
     <p class="card-meta">
       By <a href="{{ url_for('public.author', username=article.author.username) }}">{{ article.author.name }}</a>
       · <time datetime="{{ article.published_at|isodate }}">{{ article.published_at|humandate }}</time>

@@ -206,6 +206,9 @@ main { padding: 2rem 0 3rem; }
 .card-title a { color: var(--ink); text-decoration: none; }
 .card-title a:hover { color: var(--accent); }
 .card-summary { margin: 0 0 .6rem; color: var(--ink-soft); font-size: .95rem; }
+/* Summaries only. .lede is shared with the site tagline, category intros,
+   author bios and error messages, none of which should italicise. */
+.article-summary, .card-summary { font-style: italic; }
 .card-meta { font-size: .82rem; color: var(--ink-soft); margin: 0; }
 
 .sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
